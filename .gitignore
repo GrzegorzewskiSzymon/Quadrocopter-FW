@@ -1,0 +1,21 @@
+# Build output
+/Debug/
+/Release/
+/build/
+
+# Eclipse / STM32CubeIDE
+.metadata/
+.settings/
+*.launch
+
+# Generated objects
+*.o
+*.d
+*.elf
+*.map
+*.hex
+*.bin
+*.list
+
+# Temporary
+*.log
