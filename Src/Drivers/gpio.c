@@ -53,3 +53,15 @@ void GPIO_InitAF(GPIO_TypeDef *port, uint32_t pin_num, uint8_t af_num)
     port->AFR[afr_index] &= ~(0xFU << afr_shift);
     port->AFR[afr_index] |= ((uint32_t)af_num << afr_shift);
 }
+
+void GPIO_InitClocks(void)
+{
+    /* Enable clocks for all available GPIO ports on STM32H723 */
+    RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN | RCC_AHB4ENR_GPIOBEN |
+                    RCC_AHB4ENR_GPIOCEN | RCC_AHB4ENR_GPIODEN |
+                    RCC_AHB4ENR_GPIOEEN | RCC_AHB4ENR_GPIOFEN |
+                    RCC_AHB4ENR_GPIOGEN | RCC_AHB4ENR_GPIOHEN;
+
+    /* Dummy read to ensure clock propagation before returning */
+    (void)RCC->AHB4ENR;
+}

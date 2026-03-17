@@ -17,7 +17,7 @@ void MCU_Init(void)
     RCC_Init();
 
     /* 2. Enable GPIO hardware clocks on AHB4 bus */
-//    GPIO_InitClocks();
+    GPIO_InitClocks();
 
     /* 3. Systick setup for 1ms base time */
     SysTick_Init();

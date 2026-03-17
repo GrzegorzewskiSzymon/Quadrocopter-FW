@@ -17,13 +17,30 @@
  */
 
 #include <stdint.h>
+#include "Drivers/mcu_init.h"
+#include "Drivers/systick.h"
+#include "Devices/led.h"
+#include "Drivers/gpio.h"
+#include "Config/board_config.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
+
+
 int main(void)
 {
-    /* Loop forever */
-	for(;;);
+    /* 1. Hardware abstraction bring-up */
+    MCU_Init();
+
+    /* 2. Devices bring-up */
+    LED_Init();
+
+    /* 3. Main operational loop */
+    for(;;)
+    {
+        GPIO_TOGGLE(LED_BLUE);
+        Delay_ms(500);
+    }
 }

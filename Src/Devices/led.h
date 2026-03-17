@@ -5,9 +5,10 @@
  *      Author: Szymon Grzegorzewski
  */
 
-#ifndef DEVICES_LED_H_
-#define DEVICES_LED_H_
+#pragma once
 
+/**
+ * @brief  Initializes GPIO pins assigned to status LEDs.
+ */
+void LED_Init(void);
 
-
-#endif /* DEVICES_LED_H_ */
