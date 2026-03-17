@@ -5,9 +5,10 @@
  *      Author: Szymon Grzegorzewski
  */
 
-#ifndef DRIVERS_MCU_INIT_H_
-#define DRIVERS_MCU_INIT_H_
+#pragma once
 
-
-
-#endif /* DRIVERS_MCU_INIT_H_ */
+/**
+ * @brief  Master initialization routine for the microcontroller.
+ * @note   Brings up clocks, power domains, basic GPIO, and system tick.
+ */
+void MCU_Init(void);
