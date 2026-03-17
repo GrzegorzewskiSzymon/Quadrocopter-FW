@@ -20,7 +20,7 @@ void MCU_Init(void)
 //    GPIO_InitClocks();
 
     /* 3. Systick setup for 1ms base time */
-//    SysTick_Init();
+    SysTick_Init();
 
     /* 4. (Placeholder) Initialize FPU context, DMA controllers, etc. */
 }
