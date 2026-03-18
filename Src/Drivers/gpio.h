@@ -98,6 +98,7 @@ static inline uint8_t GPIO_ReadPin(GPIO_TypeDef *port, uint32_t pin_num)
 /* INITIALIZATION PROTOTYPES & WRAPPERS                                      */
 /* ========================================================================= */
 
+void GPIO_InitClocks(void);
 void GPIO_InitPin(GPIO_TypeDef *port, uint32_t pin_num, uint8_t mode, uint8_t otype, uint8_t ospeed, uint8_t pupd);
 void GPIO_InitAF(GPIO_TypeDef *port, uint32_t pin_num, uint8_t af_num);
 
