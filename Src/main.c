@@ -16,12 +16,10 @@
  ******************************************************************************
  */
 
-#include <stdint.h>
-#include "Drivers/mcu_init.h"
-#include "Drivers/systick.h"
-#include "Devices/led.h"
-#include "Drivers/gpio.h"
-#include "Config/board_config.h"
+#include "stm32h723xx.h"
+#include "mcu_init.h"
+#include "systick.h"
+#include "led.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
@@ -37,10 +35,21 @@ int main(void)
     /* 2. Devices bring-up */
     LED_Init();
 
-    /* 3. Main operational loop */
+
     for(;;)
     {
-        GPIO_TOGGLE(LED_BLUE);
-        Delay_ms(500);
+        LED_SetColor(0, 255, 0, 0);
+        LED_SetColor(1, 255, 0, 0);
+        LED_SetColor(2, 255, 0, 0);
+        LED_SetColor(3, 255, 0, 0);
+        LED_Update();
+        Delay_ms(50);
+        
+        LED_SetColor(0, 0, 0, 0);
+        LED_SetColor(1, 0, 0, 0);
+        LED_SetColor(2, 0, 0, 0);
+        LED_SetColor(3, 0, 0, 0);
+        LED_Update();
+        Delay_ms(5000);
     }
 }
