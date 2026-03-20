@@ -25,7 +25,7 @@ target_compile_definitions(${PROJECT_NAME}.elf PRIVATE STM32H723xx)
 set(MCU_FLAGS "-mcpu=cortex-m7" "-mthumb" "-mfpu=fpv5-d16" "-mfloat-abi=hard")
 
 target_compile_options(${PROJECT_NAME}.elf PRIVATE
-    ${MCU_FLAGS} -O2 -Wall -Wextra -ffunction-sections -fdata-sections
+    ${MCU_FLAGS} -Og -g3 -Wall -Wextra -ffunction-sections -fdata-sections
 )
 
 target_link_options(${PROJECT_NAME}.elf PRIVATE
