@@ -47,7 +47,7 @@ if(CMSIS_DIRS)
 endif()
 
 target_include_directories(${PROJECT_NAME}.elf PRIVATE
-    Src/Config Src/Init Src/Drivers Src/Devices Src/Utils ${CMSIS_DIRS}
+    Src/Config Src/Init Src/Drivers Src/Devices Src/Utils Src/System ${CMSIS_DIRS}
 )
 
 # 7. Post-build actions (Generate .bin, .hex and print size)
