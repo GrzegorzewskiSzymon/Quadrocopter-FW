@@ -8,15 +8,22 @@
 
 void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config)
 {
-    /* Temporary solution for SPI4 TODO: will eventually be handled in rcc.c */
-    if (SPIx == SPI4)
-    {
+    /* Temporary solution for SPI4 & SPI6 TODO: RCC driver */
+    if (SPIx == SPI4) {
         RCC->APB2ENR |= RCC_APB2ENR_SPI4EN;
         (void)RCC->APB2ENR;
         RCC->APB2RSTR |= RCC_APB2RSTR_SPI4RST;
         (void)RCC->APB2RSTR; 
         RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI4RST;
         (void)RCC->APB2RSTR; 
+    }
+    else if (SPIx == SPI6) {
+        RCC->APB4ENR |= RCC_APB4ENR_SPI6EN;
+        (void)RCC->APB4ENR;
+        RCC->APB4RSTR |= RCC_APB4RSTR_SPI6RST;
+        (void)RCC->APB4RSTR; 
+        RCC->APB4RSTR &= ~RCC_APB4RSTR_SPI6RST;
+        (void)RCC->APB4RSTR; 
     }
 
     SPIx->CR1 &= ~SPI_CR1_SPE;
@@ -49,6 +56,27 @@ void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size
     {
         while ((SPIx->SR & SPI_SR_TXP) == 0) { }
         *((__IO uint8_t *)&SPIx->TXDR) = data[i];
+    }
+
+    while ((SPIx->SR & SPI_SR_EOT) == 0) { }
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC;
+}
+
+void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+{
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    SPIx->CR2 = size;
+    SPIx->CR1 |= SPI_CR1_CSTART;
+
+    for (uint32_t i = 0; i < size; i++)
+    {
+        while ((SPIx->SR & SPI_SR_TXP) == 0) { }
+        *((__IO uint8_t *)&SPIx->TXDR) = tx_data[i];
+
+        while ((SPIx->SR & SPI_SR_RXP) == 0) { }
+        rx_data[i] = *((__IO uint8_t *)&SPIx->RXDR);
     }
 
     while ((SPIx->SR & SPI_SR_EOT) == 0) { }
