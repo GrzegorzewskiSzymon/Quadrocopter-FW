@@ -54,8 +54,14 @@ void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size
 
     for (uint32_t i = 0; i < size; i++)
     {
+        /* Czekaj na wolne miejsce w TX FIFO */
         while ((SPIx->SR & SPI_SR_TXP) == 0) { }
         *((__IO uint8_t *)&SPIx->TXDR) = data[i];
+
+        /* KRYTYCZNE: Czekaj na powrót bajtu i zdejmij go z RX FIFO */
+        while ((SPIx->SR & SPI_SR_RXP) == 0) { }
+        volatile uint8_t dummy = *((__IO uint8_t *)&SPIx->RXDR);
+        (void)dummy; /* Zapobiega ostrzeżeniom kompilatora */
     }
 
     while ((SPIx->SR & SPI_SR_EOT) == 0) { }

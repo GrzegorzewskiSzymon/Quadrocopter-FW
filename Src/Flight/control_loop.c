@@ -6,6 +6,7 @@
  */
 
 #include "control_loop.h"
+#include "stm32h723xx.h"
 
 /* TODO: Include FSM, IMU, ESC (Timer CCR) headers */
 
@@ -35,4 +36,16 @@ void ControlLoop_Execute(void) {
      * - Write 0 to TIMx->CCR1..4 (Disable motors)
      * }
      */
+}
+
+/* Standard CMSIS handler name for EXTI Line 4 */
+void EXTI4_IRQHandler(void)
+{
+    /* Quick flag check and clear (Zero-Overhead) */
+    if (EXTI->PR1 & EXTI_PR1_PR4)
+    {
+        EXTI->PR1 = EXTI_PR1_PR4; /* Writing 1 clears bit in rc_w1 registers (Read/Clear Write 1) */
+        
+        /* Here you insert a software flag, RTOS semaphore or call DMA for SPI read */
+    }
 }

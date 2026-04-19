@@ -24,26 +24,31 @@ int main(void)
     MCU_Init();
 
     /* 2. Devices bring-up */
-    LED_Init();
+    // LED_Init();
     ICM45686_Init();
 
-    volatile uint8_t who_am_i = 0;
-
+    ICM45686_Data_t imu_data;
     for(;;)
     {
-        who_am_i = ICM45686_ReadWhoAmI();
-        LED_SetColor(0, 255, 0, 0);
-        LED_SetColor(1, 255, 0, 0);
-        LED_SetColor(2, 255, 0, 0);
-        LED_SetColor(3, 255, 0, 0);
-        LED_Update();
-        Delay_ms(5);
+
+        // LED_SetColor(0, 255, 0, 0);
+        // LED_SetColor(1, 255, 0, 0);
+        // LED_SetColor(2, 255, 0, 0);
+        // LED_SetColor(3, 255, 0, 0);
+        // LED_Update();
+        // Delay_ms(5);
         
-        LED_SetColor(0, 0, 0, 0);
-        LED_SetColor(1, 0, 0, 0);
-        LED_SetColor(2, 0, 0, 0);
-        LED_SetColor(3, 0, 0, 0);
-        LED_Update();
-        Delay_ms(500);
+        // LED_SetColor(0, 0, 0, 0);
+        // LED_SetColor(1, 0, 0, 0);
+        // LED_SetColor(2, 0, 0, 0);
+        // LED_SetColor(3, 0, 0, 0);
+        // LED_Update();
+        // Delay_ms(500);
+
+        if (ICM45686_IsDataReady())
+        {
+             ICM45686_ReadDataBurst(&imu_data);
+        }
+
     }
 }
