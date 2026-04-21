@@ -7,5 +7,7 @@
 
 #pragma once
 
+#include "icm45686.h"
+
 void ControlLoop_Init(void);
-void ControlLoop_Execute(void);
+void ControlLoop_Execute(ICM45686_Data_t *imu_data);

@@ -11,6 +11,12 @@
 #include "spi.h"
 #include "board_config.h"
 #include "systick.h"
+#include "dma.h"
+#include "../Flight/control_loop.h"
+
+/* CRITICAL: 32-byte alignment for D-Cache line boundary. Must be placed in D3 Domain (SRAM4) */
+__attribute__((aligned(32), section(".sram4"))) static uint8_t imu_tx_buf[32];
+__attribute__((aligned(32), section(".sram4"))) static uint8_t imu_rx_buf[32];
 
 static inline uint8_t ICM45686_ReadRegister(uint8_t reg)
 {
@@ -182,4 +188,51 @@ void ICM45686_ReadDataBurst(ICM45686_Data_t *data)
     data->gyro[2]  = (int16_t)((rx_buf[12] << 8) | rx_buf[11]); /* Gyro Z */
     
     data->temp     = (int16_t)((rx_buf[14] << 8) | rx_buf[13]); /* Temp */
+}
+
+
+
+
+static ICM45686_Data_t imu_data_latest;
+
+void ICM45686_StartDMAReadBurst(void)
+{
+    /* Prepare the register address for burst read */
+    imu_tx_buf[0] = ICM45686_REG_ACCEL_DATA_X0_UI | ICM45686_SPI_READ_BIT;
+    
+    /* Clean D-Cache: Push CPU changes from Cache to Main Memory (SRAM4) so BDMA sees it */
+    SCB_CleanDCache_by_Addr((uint32_t*)imu_tx_buf, 32);
+    
+    /* Assert CS */
+    GPIO_RESET(IMU2_CS);
+
+    /* Start DMA Transaction: 1 Byte Register + 14 Bytes Payload = 15 Bytes */
+    SPI_TransmitReceive_DMA(SPI6, BDMA_Channel1, BDMA_Channel0, imu_tx_buf, imu_rx_buf, 15);
+}
+
+void ICM45686_DMA_RxComplete_Callback(void)
+{
+    /* De-assert CS immediately upon DMA RX completion */
+    GPIO_SET(IMU2_CS);
+
+    /* Optional: Disable DMA requests on SPI6 to maintain clean state */
+    SPI6->CR1 &= ~SPI_CR1_SPE;
+    SPI6->CFG1 &= ~(SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN);
+
+    /* Invalidate D-Cache: BDMA updated Main Memory. CPU must fetch fresh data, not old Cache */
+    SCB_InvalidateDCache_by_Addr((uint32_t*)imu_rx_buf, 32);
+
+    /* Parse data (Little-Endian) */
+    imu_data_latest.accel[0] = (int16_t)((imu_rx_buf[2]  << 8) | imu_rx_buf[1]);
+    imu_data_latest.accel[1] = (int16_t)((imu_rx_buf[4]  << 8) | imu_rx_buf[3]);
+    imu_data_latest.accel[2] = (int16_t)((imu_rx_buf[6]  << 8) | imu_rx_buf[5]);
+    
+    imu_data_latest.gyro[0]  = (int16_t)((imu_rx_buf[8]  << 8) | imu_rx_buf[7]);
+    imu_data_latest.gyro[1]  = (int16_t)((imu_rx_buf[10] << 8) | imu_rx_buf[9]);
+    imu_data_latest.gyro[2]  = (int16_t)((imu_rx_buf[12] << 8) | imu_rx_buf[11]);
+    
+    imu_data_latest.temp     = (int16_t)((imu_rx_buf[14] << 8) | imu_rx_buf[13]);
+
+    /* Execute Hard Real-Time Control Loop (Pass pointer to avoid copy overhead) */
+    ControlLoop_Execute(&imu_data_latest);
 }

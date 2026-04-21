@@ -14,7 +14,7 @@ void ControlLoop_Init(void) {
     /* TODO: Initialize PID controllers, EKF matrices */
 }
 
-void ControlLoop_Execute(void) {
+void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
     /* * CRITICAL EXECUTION PATH - ZERO BLOCKING CALLS
      * Triggered from hardware interrupt (e.g., DMA_TC for SPI)
      */
@@ -38,14 +38,14 @@ void ControlLoop_Execute(void) {
      */
 }
 
-/* Standard CMSIS handler name for EXTI Line 4 */
 void EXTI4_IRQHandler(void)
 {
     /* Quick flag check and clear (Zero-Overhead) */
     if (EXTI->PR1 & EXTI_PR1_PR4)
     {
-        EXTI->PR1 = EXTI_PR1_PR4; /* Writing 1 clears bit in rc_w1 registers (Read/Clear Write 1) */
+        EXTI->PR1 = EXTI_PR1_PR4; /* rc_w1 clears the flag */
         
-        /* Here you insert a software flag, RTOS semaphore or call DMA for SPI read */
+        /* Start non-blocking DMA background transaction */
+        ICM45686_StartDMAReadBurst();
     }
 }

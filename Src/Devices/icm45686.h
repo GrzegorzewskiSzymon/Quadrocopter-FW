@@ -120,3 +120,5 @@ void    ICM45686_WriteRegister(uint8_t reg, uint8_t value);
 void    ICM45686_Config(void);
 bool    ICM45686_IsDataReady(void);
 void    ICM45686_ReadDataBurst(ICM45686_Data_t *data);
+void    ICM45686_StartDMAReadBurst(void);
+void    ICM45686_DMA_RxComplete_Callback(void);

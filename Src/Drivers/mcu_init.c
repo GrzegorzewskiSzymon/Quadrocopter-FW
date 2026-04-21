@@ -10,6 +10,7 @@
 #include "rcc.h"
 #include "gpio.h"
 #include "systick.h"
+#include "dma.h"
 
 static void DBGMCU_Init(void) 
 {
@@ -45,4 +46,6 @@ void MCU_Init(void)
     SysTick_Init();
 
     /* 5. (Placeholder) Initialize FPU context, DMA controllers, etc. */
+
+    DMA_Init();
 }

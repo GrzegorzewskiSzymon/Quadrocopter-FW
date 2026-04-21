@@ -49,6 +49,7 @@ MEMORY
   RAM_D1  (xrw)    : ORIGIN = 0x24000000,   LENGTH = 320K
   RAM_D2  (xrw)    : ORIGIN = 0x30000000,   LENGTH = 32K
   RAM_D3  (xrw)    : ORIGIN = 0x38000000,   LENGTH = 16K
+  SRAM4   (xrw)    : ORIGIN = 0x38000000,   LENGTH = 64K
 }
 
 /* Define output sections */
@@ -173,6 +174,14 @@ SECTIONS
     libm.a ( * )
     libgcc.a ( * )
   }
+
+  .sram4 (NOLOAD) :
+    {
+      . = ALIGN(32);
+      *(.sram4)
+      *(.sram4*)
+      . = ALIGN(32);
+    } > SRAM4
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }

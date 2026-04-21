@@ -54,14 +54,14 @@ void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size
 
     for (uint32_t i = 0; i < size; i++)
     {
-        /* Czekaj na wolne miejsce w TX FIFO */
+        /* Wait for free space in TX FIFO */
         while ((SPIx->SR & SPI_SR_TXP) == 0) { }
         *((__IO uint8_t *)&SPIx->TXDR) = data[i];
 
-        /* KRYTYCZNE: Czekaj na powrót bajtu i zdejmij go z RX FIFO */
+        /* CRITICAL: Wait for byte return and remove it from RX FIFO */
         while ((SPIx->SR & SPI_SR_RXP) == 0) { }
         volatile uint8_t dummy = *((__IO uint8_t *)&SPIx->RXDR);
-        (void)dummy; /* Zapobiega ostrzeżeniom kompilatora */
+        (void)dummy; /* Prevents compiler warnings */
     }
 
     while ((SPIx->SR & SPI_SR_EOT) == 0) { }
@@ -87,4 +87,39 @@ void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uin
 
     while ((SPIx->SR & SPI_SR_EOT) == 0) { }
     SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC;
+}
+
+
+void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+{
+    /* SPI must be disabled before CFG1 register modification */
+    SPIx->CR1 &= ~SPI_CR1_SPE;
+
+    /* Absolute clearing of all status flags and errors */
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    /* BDMA RX channel configuration */
+    BDMA_Rx->CCR &= ~BDMA_CCR_EN;
+    BDMA_Rx->CPAR = (uint32_t)&SPIx->RXDR;
+    BDMA_Rx->CM0AR = (uint32_t)rx_data;  /* POPRAWKA: CM0AR zamiast CMAR */
+    BDMA_Rx->CNDTR = size;
+    BDMA_Rx->CCR |= BDMA_CCR_EN;
+
+    /* BDMA TX channel configuration */
+    BDMA_Tx->CCR &= ~BDMA_CCR_EN;
+    BDMA_Tx->CPAR = (uint32_t)&SPIx->TXDR;
+    BDMA_Tx->CM0AR = (uint32_t)tx_data;  /* POPRAWKA: CM0AR zamiast CMAR */
+    BDMA_Tx->CNDTR = size;
+    BDMA_Tx->CCR |= BDMA_CCR_EN;
+
+    /* Connect DMA requests to SPI state machine */
+    SPIx->CFG1 |= SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN; 
+
+    /* STM32H7 requires explicit specification of transaction size in Master mode */
+    SPIx->CR2 = size;
+
+    /* Start hardware Master transaction */
+    SPIx->CR1 |= SPI_CR1_SPE;
+    SPIx->CR1 |= SPI_CR1_CSTART;
 }

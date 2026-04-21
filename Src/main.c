@@ -26,8 +26,7 @@ int main(void)
     /* 2. Devices bring-up */
     // LED_Init();
     ICM45686_Init();
-
-    ICM45686_Data_t imu_data;
+    
     for(;;)
     {
 
@@ -45,10 +44,6 @@ int main(void)
         // LED_Update();
         // Delay_ms(500);
 
-        if (ICM45686_IsDataReady())
-        {
-             ICM45686_ReadDataBurst(&imu_data);
-        }
 
     }
 }
