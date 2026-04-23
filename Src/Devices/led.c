@@ -11,9 +11,10 @@
 #include "board_config.h"
 
 #define BITS_PER_LED       24U
-#define SPI_TX_SIZE         100U 
+#define SPI_TX_SIZE         128U 
 #define WS2812_0_CODE       0xC0U 
 #define WS2812_1_CODE       0xFCU 
+#define WS2812_PREAMBLE_BYTES 16U
 
 static uint8_t spi_tx_buffer[SPI_TX_SIZE];
 
@@ -71,7 +72,15 @@ void LED_SetColor(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b)
     if (led_index >= LED_COUNT) return;
 
     uint32_t color = ((uint32_t)g << 16) | ((uint32_t)r << 8) | (uint32_t)b;
-    uint32_t buffer_offset = led_index * BITS_PER_LED;
+    
+    /*
+     * CRITICAL: Hardware SPI activation (CSTART/SPE) introduces jitter on the very first 
+     * transmitted byte. Since the WS2812 protocol relies on strict pulse-width timing 
+     * rather than a clock line, this initial jitter corrupts the first LED's data frame. 
+     * Shifting the payload with a zero-byte preamble allows the SPI hardware pipeline 
+     * to fully stabilize before transmitting the actual color data.
+     */
+    uint32_t buffer_offset = WS2812_PREAMBLE_BYTES + (led_index * BITS_PER_LED);
 
     for (uint8_t i = 0; i < 24U; i++)
     {
@@ -84,6 +93,17 @@ void LED_SetColor(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b)
 
 void LED_Update(void)
 {
-    SPI_Transmit_Blocking(SPI4, spi_tx_buffer, SPI_TX_SIZE);
+    /* 1. Flush D-Cache (Cortex-M7) changes to physical RAM */
+    SCB_CleanDCache_by_Addr((uint32_t*)spi_tx_buffer, SPI_TX_SIZE);
+
+    /* 2. Clear interrupt flags for stream 1 from previous transfer.
+       If we skip this, the assignment DMA_Tx->CR |= DMA_SxCR_EN in the SPI driver
+       will be silently ignored by the DMA controller!
+       LIFCR - Lower Interrupt Flag Clear Register (for streams 0-3).
+       CTCIF1 = Transfer Complete, CTEIF1 = Transfer Error. */
+    DMA1->LIFCR = DMA_LIFCR_CTCIF1 | DMA_LIFCR_CTEIF1;
+
+    /* 3. Delegation to SPI driver - Fire and forget */
+    SPI_Transmit_DMA(SPI4, DMA1_Stream1, spi_tx_buffer, SPI_TX_SIZE);
 }
 

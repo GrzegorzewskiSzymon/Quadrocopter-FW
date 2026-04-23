@@ -7,8 +7,9 @@
 
 #include "dma.h"
 #include "icm45686.h"
+#include "stm32h723xx.h"
 
-void DMA_Init(void)
+void BDMA_Init(void)
 {
     /* 1. Enable BDMA clock (Powers both BDMA and DMAMUX2 in D3 domain) */
     RCC->AHB4ENR |= RCC_AHB4ENR_BDMAEN;
@@ -35,6 +36,25 @@ void DMA_Init(void)
     NVIC_SetPriority(BDMA_Channel0_IRQn, 1);
     NVIC_EnableIRQ(BDMA_Channel0_IRQn);
 }
+
+
+void DMA1_Init(void)
+{
+    /* 1. Enable DMA1 clock (Powers both DMA1 and DMAMUX1 in D2 domain) */
+    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+    (void)RCC->AHB1ENR; /* DSB/ISB alternative for clock stabilization */
+
+    /* 2. Configure DMAMUX1 for SPI4 */
+    /* Request 12: SPI4_TX -> DMA Channel 1 */
+    DMAMUX1_Channel1->CCR = 84U; 
+
+    /* 4. Configure DMA1 Channel 1 (TX) */
+    DMA1_Stream1->CR =                    /* Priority: Low */
+                        DMA_SxCR_MINC     /* Memory increment mode */
+                      | DMA_SxCR_DIR_0;   /* Memory to Peripheral */
+
+}
+
 
 void BDMA_CH0_IRQHandler(void)
 {

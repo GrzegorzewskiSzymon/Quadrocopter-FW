@@ -102,14 +102,14 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, B
     /* BDMA RX channel configuration */
     BDMA_Rx->CCR &= ~BDMA_CCR_EN;
     BDMA_Rx->CPAR = (uint32_t)&SPIx->RXDR;
-    BDMA_Rx->CM0AR = (uint32_t)rx_data;  /* POPRAWKA: CM0AR zamiast CMAR */
+    BDMA_Rx->CM0AR = (uint32_t)rx_data; 
     BDMA_Rx->CNDTR = size;
     BDMA_Rx->CCR |= BDMA_CCR_EN;
 
     /* BDMA TX channel configuration */
     BDMA_Tx->CCR &= ~BDMA_CCR_EN;
     BDMA_Tx->CPAR = (uint32_t)&SPIx->TXDR;
-    BDMA_Tx->CM0AR = (uint32_t)tx_data;  /* POPRAWKA: CM0AR zamiast CMAR */
+    BDMA_Tx->CM0AR = (uint32_t)tx_data;  
     BDMA_Tx->CNDTR = size;
     BDMA_Tx->CCR |= BDMA_CCR_EN;
 
@@ -120,6 +120,42 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, B
     SPIx->CR2 = size;
 
     /* Start hardware Master transaction */
+    SPIx->CR1 |= SPI_CR1_SPE;
+    SPIx->CR1 |= SPI_CR1_CSTART;
+}
+
+
+void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size)
+{
+    /* 1. SPI must be disabled before CFG1 register modification */
+    SPIx->CR1 &= ~SPI_CR1_SPE;
+
+    /* 2. Absolute clearing of all SPI status flags and errors */
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    /* 3. DMA stream configuration (D1/D2 Domain) */
+    DMA_Tx->CR &= ~DMA_SxCR_EN;
+    
+    /* On STM32, for classic DMA1/DMA2 we must wait until the hardware actually
+       disables the stream, otherwise register writes will be ignored. */
+    while (DMA_Tx->CR & DMA_SxCR_EN) { } 
+
+    DMA_Tx->PAR  = (uint32_t)&SPIx->TXDR;
+    DMA_Tx->M0AR = (uint32_t)tx_data;
+    DMA_Tx->NDTR = size;
+    
+    /* Enable DMA stream (Hardware is now ready and waiting for a request from SPI) */
+    DMA_Tx->CR |= DMA_SxCR_EN;
+
+    /* 4. Connect TX DMA requests to SPI state machine and disable RX */
+    SPIx->CFG1 |= SPI_CFG1_TXDMAEN; 
+    SPIx->CFG1 &= ~SPI_CFG1_RXDMAEN; 
+
+    /* 5. STM32H7 requires explicit specification of transaction size in Master mode */
+    SPIx->CR2 = size;
+
+    /* 6. Start hardware Master transaction - hardware will immediately trigger DMA */
     SPIx->CR1 |= SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_CSTART;
 }

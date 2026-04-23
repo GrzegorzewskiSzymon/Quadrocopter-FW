@@ -47,5 +47,7 @@ void MCU_Init(void)
 
     /* 5. (Placeholder) Initialize FPU context, DMA controllers, etc. */
 
-    DMA_Init();
+    BDMA_Init();
+
+    DMA1_Init();
 }

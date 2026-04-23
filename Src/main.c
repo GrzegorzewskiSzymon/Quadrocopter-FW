@@ -30,19 +30,19 @@ int main(void)
     for(;;)
     {
 
-        // LED_SetColor(0, 255, 0, 0);
-        // LED_SetColor(1, 255, 0, 0);
-        // LED_SetColor(2, 255, 0, 0);
-        // LED_SetColor(3, 255, 0, 0);
-        // LED_Update();
-        // Delay_ms(5);
+        LED_SetColor(0, 255, 0, 0);
+        LED_SetColor(1, 255, 0, 0);
+        LED_SetColor(2, 255, 0, 0);
+        LED_SetColor(3, 255, 0, 0);
+        LED_Update();
+        Delay_ms(5);
         
-        // LED_SetColor(0, 0, 0, 0);
-        // LED_SetColor(1, 0, 0, 0);
-        // LED_SetColor(2, 0, 0, 0);
-        // LED_SetColor(3, 0, 0, 0);
-        // LED_Update();
-        // Delay_ms(500);
+        LED_SetColor(0, 0, 0, 0);
+        LED_SetColor(1, 0, 0, 0);
+        LED_SetColor(2, 0, 0, 0);
+        LED_SetColor(3, 0, 0, 0);
+        LED_Update();
+        Delay_ms(500);
 
 
     }

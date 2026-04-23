@@ -9,4 +9,5 @@
 
 #include "stm32h723xx.h"
 
-void DMA_Init(void);
+void BDMA_Init(void);
+void DMA1_Init(void);
