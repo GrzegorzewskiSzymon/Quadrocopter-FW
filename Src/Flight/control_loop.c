@@ -7,12 +7,15 @@
 
 #include "control_loop.h"
 #include "stm32h723xx.h"
+#include <math.h>
 
 /* TODO: Include FSM, IMU, ESC (Timer CCR) headers */
 
 void ControlLoop_Init(void) {
     /* TODO: Initialize PID controllers, EKF matrices */
 }
+float acc_roll;
+float acc_pitch;
 
 void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
     /* * CRITICAL EXECUTION PATH - ZERO BLOCKING CALLS
@@ -36,6 +39,23 @@ void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
      * - Write 0 to TIMx->CCR1..4 (Disable motors)
      * }
      */
+
+
+/* Static state memory - must survive function exit */
+    static float roll = 0.0f, pitch = 0.0f;
+
+    /* 1. Read accelerometer data as angle in degrees (multiplier 180/PI = 57.2958f) */
+    acc_roll  = atan2f(imu_data->accel[1], imu_data->accel[2]) * 57.2958f;
+    acc_pitch = atan2f(-imu_data->accel[0], sqrtf((float)imu_data->accel[1]*imu_data->accel[1] + (float)imu_data->accel[2]*imu_data->accel[2])) * 57.2958f;
+
+    /* 2. Simple complementary filter (98% gyroscope, 2% accelerometer)
+          Constant 0.000305f is the aggregated coefficient: (2000dps/32768) * 0.005s dt */
+    roll  = 0.98f * (roll  + imu_data->gyro[0] * 0.000305f) + 0.02f * acc_roll;
+    pitch = 0.98f * (pitch + imu_data->gyro[1] * 0.000305f) + 0.02f * acc_pitch;
+    
+    /* Variables 'roll' and 'pitch' are ready for reading in degrees */
+
+
 }
 
 void EXTI4_IRQHandler(void)

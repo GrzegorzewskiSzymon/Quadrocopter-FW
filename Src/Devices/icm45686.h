@@ -36,7 +36,7 @@
 /* Interface configuration */
 #define ICM45686_REG_INTF_CONFIG1_OVRD  0x2D  /* Override SPI 3/4-wire mode                  */
 
-/* Identyfikacja */
+/* Identification */
 #define ICM45686_REG_WHO_AM_I           0x72
 #define ICM45686_REG_MISC2              0x7F  /* SOFT_RST                                      */
 

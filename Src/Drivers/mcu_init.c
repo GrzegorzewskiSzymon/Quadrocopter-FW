@@ -33,6 +33,17 @@ static void DBGMCU_Init(void)
 
 void MCU_Init(void)
 {
+
+/* 0. Enable hardware FPU unit (Coprocessor 10 and 11) */
+    /* Set bits for full access (Full Access) */
+    SCB->CPACR |= ((3UL << 10*2) | (3UL << 11*2));
+    
+    /* Memory and instruction barriers - enforce pipeline alignment
+       before executing any floating-point instruction */
+    __DSB();
+    __ISB();
+
+
     /* 1. Initialize core system clock (550 MHz), caches and power domains */
     RCC_Init();
 
