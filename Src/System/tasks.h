@@ -6,6 +6,8 @@
  */
 
 #pragma once
+#include <stdint.h>
+
 
 void Task_FSM_Update(void);
 void Task_Baro(void);

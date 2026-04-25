@@ -10,7 +10,7 @@
 #include "stm32h723xx.h"
 
 /* Global system time counter */
-static volatile uint32_t sys_tick_ms = 0;
+volatile uint32_t sys_tick_ms = 0;
 
 void SysTick_Init(void)
 {

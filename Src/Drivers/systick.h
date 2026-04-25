@@ -21,8 +21,4 @@ void SysTick_Init(void);
  */
 void Delay_ms(uint32_t ms);
 
-/**
- * @brief  Returns the current system uptime in milliseconds.
- * @return 32-bit counter value.
- */
-uint32_t SysTick_GetMs(void);
+extern volatile uint32_t sys_tick_ms; /* Global system time counter, incremented in SysTick_Handler */

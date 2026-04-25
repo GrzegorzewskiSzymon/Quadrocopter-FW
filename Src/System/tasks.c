@@ -6,6 +6,7 @@
  */
 
 #include "tasks.h"
+#include "led.h"
 
 
 void Task_FSM_Update(void) {
@@ -20,6 +21,12 @@ void Task_Telemetry(void) {
     /* TODO: Check FSM_GetState(), format payload, push to NRF24 SPI buffer */
 }
 
-void Task_LED(void) {
-    /* TODO: Check FSM_GetState(), set WS2812 colors via SPI4 */
+void Task_LED(void)
+{
+    /* TODO: 
+     * fsm_state_t state = FSM_GetState();
+     * switch(state) { case FSM_IDLE: ... case FSM_ARMED: ... } 
+     */
+    LED_SetEffect(LED_EFFECT_PULSE_PINK);
+    LED_Process();
 }
