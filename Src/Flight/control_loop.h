@@ -9,5 +9,8 @@
 
 #include "icm45686.h"
 
+extern float roll;
+extern float pitch;
+
 void ControlLoop_Init(void);
 void ControlLoop_Execute(ICM45686_Data_t *imu_data);

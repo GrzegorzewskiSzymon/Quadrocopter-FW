@@ -20,17 +20,18 @@
 /* Available hardware visual effects */
 typedef enum {
     LED_EFFECT_OFF,
-    LED_EFFECT_SOLID_WHITE,
-    LED_EFFECT_SPINNING_CYAN,
-    LED_EFFECT_STROBE_WARNING,
-    LED_EFFECT_PULSE_BLUE,
-    LED_EFFECT_PULSE_PINK,
-    LED_EFFECT_CIRCLING_WAVE,
+    LED_EFFECT_SOLID,         
+    LED_EFFECT_SPINNING,       
+    LED_EFFECT_STROBE,         
+    LED_EFFECT_PULSE,          
+    LED_EFFECT_CIRCLING_WAVE,   
+    LED_EFFECT_ATTITUDE
 } LED_Effect_t;
 
 void LED_Init(void);
 void LED_SetColor(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b);
 void LED_Update(void);
-void LED_SetEffect(LED_Effect_t effect);
+
+void LED_SetEffect(LED_Effect_t effect, uint8_t r, uint8_t g, uint8_t b);
 void LED_Process(void);
 

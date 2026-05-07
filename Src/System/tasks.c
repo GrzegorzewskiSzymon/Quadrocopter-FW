@@ -27,6 +27,6 @@ void Task_LED(void)
      * fsm_state_t state = FSM_GetState();
      * switch(state) { case FSM_IDLE: ... case FSM_ARMED: ... } 
      */
-    LED_SetEffect(LED_EFFECT_PULSE_PINK);
+    LED_SetEffect(LED_EFFECT_ATTITUDE, 50, 0, 0);
     LED_Process();
 }

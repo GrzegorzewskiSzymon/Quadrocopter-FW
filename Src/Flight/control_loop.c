@@ -17,6 +17,8 @@ void ControlLoop_Init(void) {
 float acc_roll;
 float acc_pitch;
 
+float roll, pitch;
+
 void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
     /* * CRITICAL EXECUTION PATH - ZERO BLOCKING CALLS
      * Triggered from hardware interrupt (e.g., DMA_TC for SPI)
@@ -42,7 +44,7 @@ void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
 
 
 /* Static state memory - must survive function exit */
-    static float roll = 0.0f, pitch = 0.0f;
+    
 
     /* 1. Read accelerometer data as angle in degrees (multiplier 180/PI = 57.2958f) */
     acc_roll  = atan2f(imu_data->accel[1], imu_data->accel[2]) * 57.2958f;
