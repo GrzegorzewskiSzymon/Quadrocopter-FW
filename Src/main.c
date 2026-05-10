@@ -12,6 +12,7 @@
 #include "led.h"
 #include "icm45686.h"
 #include "scheduler.h"
+#include "nrf24l01.h"
 
 
 int main(void)
@@ -24,10 +25,12 @@ int main(void)
     /* 2. Devices bring-up */
     LED_Init();
     ICM45686_Init();
-
+    NRF24_Test_Init();
+    NRF24_Test_Run();
     for(;;)
     {
         Scheduler_Run();
+
 
 
     }
