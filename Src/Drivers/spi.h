@@ -39,3 +39,6 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, B
 
 /* Function signature for D1/D2 domain (SPI1, SPI2, SPI3, SPI4, SPI5) using DMA1/DMA2 */
 void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size);
+
+/* Additional function for standard DMA streams (D1/D2 Domain) */
+void SPI_TransmitReceive_DMA_Stream(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);

@@ -159,3 +159,32 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
     SPIx->CR1 |= SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_CSTART;
 }
+
+void SPI_TransmitReceive_DMA_Stream(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+{
+    SPIx->CR1 &= ~SPI_CR1_SPE;
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    /* RX DMA Configuration */
+    DMA_Rx->CR &= ~DMA_SxCR_EN;
+    while (DMA_Rx->CR & DMA_SxCR_EN) { } 
+    DMA_Rx->PAR = (uint32_t)&SPIx->RXDR;
+    DMA_Rx->M0AR = (uint32_t)rx_data;
+    DMA_Rx->NDTR = size;
+    DMA_Rx->CR |= DMA_SxCR_EN;
+
+    /* TX DMA Configuration */
+    DMA_Tx->CR &= ~DMA_SxCR_EN;
+    while (DMA_Tx->CR & DMA_SxCR_EN) { } 
+    DMA_Tx->PAR = (uint32_t)&SPIx->TXDR;
+    DMA_Tx->M0AR = (uint32_t)tx_data;
+    DMA_Tx->NDTR = size;
+    DMA_Tx->CR |= DMA_SxCR_EN;
+
+    SPIx->CFG1 |= SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN; 
+    SPIx->CR2 = size;
+
+    SPIx->CR1 |= SPI_CR1_SPE;
+    SPIx->CR1 |= SPI_CR1_CSTART;
+}

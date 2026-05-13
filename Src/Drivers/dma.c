@@ -53,6 +53,21 @@ void DMA1_Init(void)
                         DMA_SxCR_MINC     /* Memory increment mode */
                       | DMA_SxCR_DIR_0;   /* Memory to Peripheral */
 
+
+    /* SPI3_RX -> DMAMUX1 Request 61 -> DMA1 Stream 2 */
+    DMAMUX1_Channel2->CCR = 61U; 
+    DMA1_Stream2->CR = DMA_SxCR_MINC   /* Memory increment */
+                     | DMA_SxCR_TCIE;  /* Enable Transfer Complete interrupt for RX! */
+                     /* DIR = 0 by default (Peripheral to Memory) */
+
+    /* SPI3_TX -> DMAMUX1 Request 62 -> DMA1 Stream 3 */
+    DMAMUX1_Channel3->CCR = 62U; 
+    DMA1_Stream3->CR = DMA_SxCR_MINC   /* Memory increment */
+                     | DMA_SxCR_DIR_0; /* Memory to Peripheral */
+
+    /* High priority RX interrupt (release CSN and CE pulse) */
+    NVIC_SetPriority(DMA1_Stream2_IRQn, 2);
+    NVIC_EnableIRQ(DMA1_Stream2_IRQn);
 }
 
 
@@ -71,5 +86,19 @@ void BDMA_CH0_IRQHandler(void)
     {
         BDMA->IFCR = BDMA_IFCR_CGIF0 | BDMA_IFCR_CTCIF0;
         ICM45686_DMA_RxComplete_Callback();
+    }
+}
+
+/* DMA1 Stream2 */
+void DMA_STR2_IRQHandler(void)
+{
+    /* Transfer Complete Interrupt for SPI3 RX */
+    if (DMA1->LISR & DMA_LISR_TCIF2)
+    {
+        DMA1->LIFCR = DMA_LIFCR_CTCIF2; /* Clear flag */
+        
+        /* Call hardware callback for NRF */
+        extern void NRF24_DMA_RxComplete_Callback(void);
+        NRF24_DMA_RxComplete_Callback();
     }
 }

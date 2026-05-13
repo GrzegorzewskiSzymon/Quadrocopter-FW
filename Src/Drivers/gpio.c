@@ -65,3 +65,45 @@ void GPIO_InitClocks(void)
     /* Dummy read to ensure clock propagation before returning */
     (void)RCC->AHB4ENR;
 }
+
+void NRF24_HW_Delay_us(uint32_t us)
+{
+    /* Pure in-line blocking delay. For 550 MHz: ~183 loop instructions / us */
+    volatile uint32_t count = us * (550U / 3U);
+    while (count--) { __NOP(); }
+}
+
+/* Configuration of EXTI for PD1 (RF_IRQ) */
+void GPIO_NRF_EXTI_Init(void)
+{
+    /* Enable SYSCFG clock required for EXTI routing */
+    RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;
+    (void)RCC->APB4ENR;
+
+    /* Mapping EXTI1 line to Port D (PD1) - Register EXTICR1(0) */
+    SYSCFG->EXTICR[0] = (SYSCFG->EXTICR[0] & ~SYSCFG_EXTICR1_EXTI1_Msk) | SYSCFG_EXTICR1_EXTI1_PD;
+
+    /* Unmask interrupt on EXTI1 line */
+    EXTI->IMR1 |= EXTI_IMR1_IM1;
+
+    /* Configure falling edge trigger (NRF pulls line to GND) */
+    EXTI->FTSR1 |= EXTI_FTSR1_TR1;
+
+    /* Set priority in NVIC (Lower than DMA, higher than Scheduler) */
+    NVIC_SetPriority(EXTI1_IRQn, 3);
+    NVIC_EnableIRQ(EXTI1_IRQn);
+}
+
+/* Global EXTI1 interrupt handler */
+void EXTI1_IRQHandler(void)
+{
+    /* Check and clear hardware interrupt flag from line 1 */
+    if (EXTI->PR1 & EXTI_PR1_PR1)
+    {
+        EXTI->PR1 = EXTI_PR1_PR1; 
+
+        /* Pass action to device layer */
+        extern void NRF24_EXTI_Callback(void);
+        NRF24_EXTI_Callback();
+    }
+}

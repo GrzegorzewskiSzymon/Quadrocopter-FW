@@ -108,3 +108,6 @@ void GPIO_InitAF(GPIO_TypeDef *port, uint32_t pin_num, uint8_t af_num);
 
 #define GPIO_INIT_AF(pin_macro, af_num) \
     GPIO_InitAF(PORT(pin_macro), PIN(pin_macro), af_num)
+
+
+void GPIO_NRF_EXTI_Init(void);
