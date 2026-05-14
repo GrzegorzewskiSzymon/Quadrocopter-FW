@@ -7,33 +7,46 @@
 
 #include "nrf24l01.h"
 #include "board_config.h"
+#include "spi.h"
+#include "gpio.h"
+#include "stddef.h"
 
 /* --- MACROS --- */
 #define NRF_CMD_W_REGISTER    0x20U
 #define NRF_CMD_W_TX_PAYLOAD  0xA0U
 #define NRF_CMD_FLUSH_TX      0xE1U
 
+#define NRF_REG_CONFIG        0x00U
+#define NRF_CONFIG_PWR_UP     (1U << 1U)
+#define NRF_REG_EN_AA         0x01U
+#define NRF_REG_SETUP_RETR    0x04U
+#define NRF_REG_RF_CH         0x05U
+#define NRF_REG_RF_SETUP      0x06U
 #define NRF_REG_STATUS        0x07U
+#define NRF_REG_RX_ADDR_P0    0x0AU
+#define NRF_REG_TX_ADDR       0x10U
+#define NRF_REG_RX_PW_P0      0x11U
+
 #define NRF_STATUS_TX_DS      (1U << 5U)
 #define NRF_STATUS_MAX_RT     (1U << 4U)
 
 /* --- INTERNAL VARIABLES --- */
 static volatile NRF24_State_t current_state = NRF_STATE_IDLE;
 
-/* Pointers to MCU domain hardware */
+/* Pointers to MCU domain hardware (Dependency Injection) */
 static SPI_TypeDef *nrf_spi = NULL;
 static DMA_Stream_TypeDef *nrf_dma_tx = NULL;
 static DMA_Stream_TypeDef *nrf_dma_rx = NULL;
 
 /* DMA buffers - Aligned to D-Cache line (32 bytes) */
-__attribute__((aligned(32))) static uint8_t dma_tx_buf[64]; 
-__attribute__((aligned(32))) static uint8_t dma_rx_buf[64];
+__attribute__((aligned(32), section(".sram4"))) static uint8_t dma_tx_buf[64]; 
+__attribute__((aligned(32), section(".sram4"))) static uint8_t dma_rx_buf[64];
 
-/* Helper functions for registers (blocking, only for Initialization/EXTI) */
+/* --- PRIVATE HELPER FUNCTIONS --- */
+
 static void NRF_SendCommand(uint8_t cmd)
 {
     uint8_t status;
-    GPIO_RESET(RF_CSN);
     GPIO_RESET(RF_CSN);
     SPI_TransmitReceive_Blocking(nrf_spi, &cmd, &status, 1U);
     GPIO_SET(RF_CSN);
@@ -74,9 +87,12 @@ static uint8_t NRF_ReadReg(uint8_t reg)
 
 static void NRF24_Setup(void)
 {
-    /* 1. System startup (PWR_UP=1, PRIM_RX=0 -> PTX), NO CRC (according to RPi test) */
+    /* 1. System startup (PWR_UP=1, PRIM_RX=0 -> PTX), NO CRC */
     NRF_WriteReg(NRF_REG_CONFIG, NRF_CONFIG_PWR_UP);
-    NRF24_HW_Delay_us(2000U); /* Time for T_pd2stby (max 1.5ms) */
+    
+    /* Time for T_pd2stby (max 1.5ms) - defined in external delay module */
+    extern void NRF24_HW_Delay_us(uint32_t us);
+    NRF24_HW_Delay_us(2000U); 
 
     /* 2. Disable Auto-ACK and retransmission */
     NRF_WriteReg(NRF_REG_EN_AA, 0x00U);
@@ -101,76 +117,19 @@ static void NRF24_Setup(void)
     NRF_WriteReg(NRF_REG_STATUS, NRF_STATUS_TX_DS | NRF_STATUS_MAX_RT);
 }
 
-/* --- API IMPLEMENTATION --- */
+/* --- PUBLIC API IMPLEMENTATION --- */
 
-void NRF24_Init(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx)
+void NRF24_Init(const NRF24_HwConfig_t *hw_config)
 {
-    /* 1. ENABLE CLOCKS (GPIO A, C, D & SPI3) */
-    RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN | RCC_AHB4ENR_GPIOCEN | RCC_AHB4ENR_GPIODEN;
-    (void)RCC->AHB4ENR; 
+    /* 1. Dependency Injection */
+    nrf_spi = hw_config->SPIx;
+    nrf_dma_tx = hw_config->DMA_Tx;
+    nrf_dma_rx = hw_config->DMA_Rx;
     
-    RCC->APB1LENR |= RCC_APB1LENR_SPI3EN;
-    (void)RCC->APB1LENR; 
-
-/* --- 2. GPIO CONFIGURATION (SPI3 AF6: PC10, PC11, PC12) --- */
-    GPIO_INIT(RF_SCK, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_INIT_AF(RF_SCK, 6U);
-
-    GPIO_INIT(RF_MISO, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_INIT_AF(RF_MISO, 6U);
-
-    GPIO_INIT(RF_MOSI, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_INIT_AF(RF_MOSI, 6U);
-
-    /* --- 3. GPIO CONFIGURATION (CONTROL PINS) --- */
-    /* CSN - Chip Select Not (PD0) */
-    GPIO_INIT(RF_CSN, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_SET(RF_CSN);   /* Standby state (High) */
-
-    /* CE - Chip Enable (PA15) */
-    GPIO_INIT(RF_CE, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_RESET(RF_CE);  /* Idle state (Low) */
-
-    /* TXEN - PA Transmit Enable (PD2) */
-    GPIO_INIT(RF_TXEN, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_RESET(RF_TXEN); /* Idle state (Low) */
-
-    /* RXEN - LNA Receive Enable (PD4) */
-    GPIO_INIT(RF_RXEN, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
-    GPIO_RESET(RF_RXEN); /* Idle state (Low) */
-
-    GPIO_INIT(RF_IRQ, GPIO_MODE_INPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PU);
-
-    /* Idle states: CSN = 1, CE = 0, TXEN = 0, RXEN = 0 */
-    GPIOD->BSRR = (1U << 0U);         /* NRF_CSN_HIGH */
-    GPIOA->BSRR = (1U << (15U + 16U));/* NRF_CE_LOW */
-    GPIOD->BSRR = (1U << (2U + 16U)); /* RFX_TXEN_LOW */
-    GPIOD->BSRR = (1U << (4U + 16U)); /* RFX_RXEN_LOW */
-
-    /* 4. SPI3 INITIALIZATION */
-    /* APB1 = 137.5 MHz. MBR = 100b (4) -> Div 32. SPI Clock = 4.29 MHz. */
-    SPI_Config_t spi3_cfg = {
-        .Mode = SPI_MODE_MASTER,
-        .Direction = SPI_DIR_FULL_DUPLEX,
-        .Prescaler = (4U << SPI_CFG1_MBR_Pos), 
-        .DataSize = 8,
-        .CPOL = false,
-        .CPHA = false
-    };
-    SPI_Init(SPI3, &spi3_cfg);
-
-    /* 5. EXTI CONFIGURATION FOR PD1 */
-    GPIO_NRF_EXTI_Init();
-
-
-    nrf_spi = SPIx;
-    nrf_dma_tx = DMA_Tx;
-    nrf_dma_rx = DMA_Rx;
     current_state = NRF_STATE_IDLE;
     
-    /* Register configuration (similar to test) called here 
-       or from external configuration function */
-       NRF24_Setup();
+    /* 2. Register configuration */
+    NRF24_Setup();
 }
 
 bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
@@ -184,13 +143,22 @@ bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
 /* DMA buffer preparation: [COMMAND] [32 BYTES PAYLOAD] */
     dma_tx_buf[0] = NRF_CMD_W_TX_PAYLOAD;
     const uint8_t *p_data = (const uint8_t *)payload;
-    for (uint8_t i = 0; i < 32U; i++) {
+    
+    /* Compile-time evaluation of struct size */
+    const uint8_t payload_len = (uint8_t)sizeof(NRF24_Payload_t);
+    uint8_t i = 0U;
+
+    /* 1. Copy valid payload data (preventing out-of-bounds read) */
+    for (; i < payload_len; i++) {
         dma_tx_buf[i + 1U] = p_data[i];
     }
 
-    /* ---- ADD THIS ----
-       Push data from L1 D-Cache to physical SRAM memory.
-       We're flushing 33 bytes (command + payload). */
+    /* 2. Pad the remaining buffer with zeros to strictly meet 32-byte width */
+    for (; i < 32U; i++) {
+        dma_tx_buf[i + 1U] = 0x00U;
+    }
+
+    /* Push CPU changes from D-Cache to Main Memory (SRAM4) */
     SCB_CleanDCache_by_Addr((uint32_t*)dma_tx_buf, 33U);
 
     /* Open SPI session */
@@ -217,7 +185,10 @@ void NRF24_DMA_RxComplete_Callback(void)
     GPIO_RESET(RF_RXEN);
     
     GPIO_SET(RF_CE);
-    NRF24_HW_Delay_us(15U); /* In IT 15us (8k cycles at 550MHz) is a fraction of a percent load, completely safe */
+    
+    extern void NRF24_HW_Delay_us(uint32_t us);
+    NRF24_HW_Delay_us(15U); 
+    
     GPIO_RESET(RF_CE);
 }
 

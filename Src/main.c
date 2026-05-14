@@ -13,6 +13,7 @@
 #include "icm45686.h"
 #include "scheduler.h"
 #include "nrf24l01.h"
+#include "drivers_config.h"
 
 
 int main(void)
@@ -26,7 +27,7 @@ int main(void)
     LED_Init();
     ICM45686_Init();
     // NRF24_Test_Init();
-    NRF24_Init(SPI3, DMA1_Stream3, DMA1_Stream2);
+    BOARD_Radio_Init();
     NRF24_Payload_t test_payload = {
         .aileron = 1500U,
         .elevator = 1500U,

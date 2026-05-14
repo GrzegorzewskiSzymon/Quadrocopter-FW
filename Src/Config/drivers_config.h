@@ -8,6 +8,6 @@
 #ifndef CONFIG_DRIVERS_CONFIG_H_
 #define CONFIG_DRIVERS_CONFIG_H_
 
-
+void BOARD_Radio_Init(void);
 
 #endif /* CONFIG_DRIVERS_CONFIG_H_ */
