@@ -48,17 +48,21 @@ void ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
     imu_bdma_rx = hw_config->BDMA_Rx;
     imu_rx_complete_cb = hw_config->RxCompleteCb;
 
-    /* 2. Hardware Sanity Check (WHO_AM_I) */
-    /* Wait 2ms for IMU to boot up after power-on sequence */
-    Delay_ms(2);
+    /* 2. Software Reset */
+    /* WHO_AM_I was unstable without reset (did not always respond correctly) */
+    ICM45686_WriteRegister(ICM45686_REG_MISC2, 0x02); // e.g., 0x01 for soft reset
+    Delay_ms(10); /* Time for IMU registers to reload after soft reset */
+
+    /* 3. Hardware Sanity Check (WHO_AM_I) - IMU-soft-reset */
     uint8_t who_am_i = ICM45686_ReadRegister(ICM45686_REG_WHO_AM_I);
+    
     if (who_am_i != ICM45686_WHO_AM_I_VAL)
     {
         /* Fatal error: Sensor not detected or SPI failure. Trap execution. */
         while (1) { }
     }
 
-    /* 3. Configure IMU Internal Registers for DRDY Interrupt */
+    /* 4. Configure IMU Internal Registers for DRDY Interrupt */
     ICM45686_Config();
 }
 
