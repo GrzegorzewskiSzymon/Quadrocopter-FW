@@ -10,4 +10,6 @@
 
 void BOARD_Radio_Init(void);
 
+void BOARD_IMU_Init(void);
+
 #endif /* CONFIG_DRIVERS_CONFIG_H_ */

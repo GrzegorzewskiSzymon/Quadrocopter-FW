@@ -6,10 +6,13 @@
  */
 
 #include "stm32h723xx.h"
+#include "drivers_config.h"
 #include "board_config.h"
 #include "gpio.h"
 #include "spi.h"
 #include "nrf24l01.h"
+#include "icm45686.h"
+#include "control_loop.h"
 
 void BOARD_Radio_Init(void)
 {
@@ -59,4 +62,53 @@ void BOARD_Radio_Init(void)
         .DMA_Rx = DMA1_Stream2
     };
     NRF24_Init(&nrf_hw);
+}
+
+
+void BOARD_IMU_Init(void)
+{
+    /* 1. Clocks (For now, eventually in BOARD_Clocks_Init) */
+    RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;
+    RCC->APB4ENR |= RCC_APB4ENR_SPI6EN;
+    (void)RCC->APB4ENR; 
+
+    /* 2. SPI6 Pins (ICM45686) */
+    GPIO_INIT(IMU2_CS, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
+    GPIO_SET(IMU2_CS);
+    GPIO_INIT(IMU2_SCK, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
+    GPIO_INIT_AF(IMU2_SCK, 8U);
+    GPIO_INIT(IMU2_MISO, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_PU);
+    GPIO_INIT_AF(IMU2_MISO, 5U);
+    GPIO_INIT(IMU2_MOSI, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
+    GPIO_INIT_AF(IMU2_MOSI, 8U);
+
+    /* 3. SPI6 Hardware Configuration */
+    SPI_Config_t spi6_cfg = {
+        .Mode      = SPI_MODE_MASTER,
+        .Direction = SPI_DIR_FULL_DUPLEX,
+        .Prescaler = (4U << SPI_CFG1_MBR_Pos), /* MBR=4 -> prescaler /32 */
+        .DataSize  = 8,
+        .CPOL      = true,
+        .CPHA      = true
+    };
+    SPI_Init(SPI6, &spi6_cfg);
+
+    /* 4. Interrupt Pin Configuration (PA4) and EXTI4 */
+    GPIO_INIT(IMU2_INT, GPIO_MODE_INPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
+    SYSCFG->EXTICR[1] &= ~SYSCFG_EXTICR2_EXTI4_Msk;
+    SYSCFG->EXTICR[1] |= (0x00U << SYSCFG_EXTICR2_EXTI4_Pos); /* Port A */
+    EXTI->RTSR1 |= EXTI_RTSR1_TR4;
+    EXTI->FTSR1 &= ~EXTI_FTSR1_TR4;
+    EXTI->IMR1 |= EXTI_IMR1_IM4;
+    NVIC_SetPriority(EXTI4_IRQn, 1);
+    NVIC_EnableIRQ(EXTI4_IRQn);
+
+    /* 5. Inject hardware configuration into IMU driver */
+    ICM45686_HwConfig_t imu_hw = {
+        .SPIx = SPI6,
+        .BDMA_Tx = BDMA_Channel1,
+        .BDMA_Rx = BDMA_Channel0,
+        .RxCompleteCb = ControlLoop_Execute /* Control Loop connected as Callback */
+    };
+    ICM45686_Init(&imu_hw);
 }

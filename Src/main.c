@@ -25,7 +25,7 @@ int main(void)
 
     /* 2. Devices bring-up */
     LED_Init();
-    ICM45686_Init();
+    BOARD_IMU_Init();
     // NRF24_Test_Init();
     BOARD_Radio_Init();
     NRF24_Payload_t test_payload = {
