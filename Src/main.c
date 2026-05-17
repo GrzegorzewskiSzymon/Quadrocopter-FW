@@ -6,6 +6,7 @@
  * Description: Main entry point for the custom R&D flight controller firmware.
  */
 
+#include "drivers_config.h"
 #include "stm32h723xx.h"
 #include "mcu_init.h"
 #include "systick.h"
@@ -24,7 +25,7 @@ int main(void)
     Scheduler_Init();
 
     /* 2. Devices bring-up */
-    LED_Init();
+    BOARD_LED_Init();
     BOARD_IMU_Init();
     // NRF24_Test_Init();
     BOARD_Radio_Init();

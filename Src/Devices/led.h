@@ -28,10 +28,19 @@ typedef enum {
     LED_EFFECT_ATTITUDE
 } LED_Effect_t;
 
-void LED_Init(void);
+/* Dependency Injection structure */
+typedef struct {
+    /* Callback triggering DMA transfer at hardware layer */
+    void (*TransmitCb)(uint8_t *tx_buffer, uint32_t size);
+} LED_HwConfig_t;
+
+
+void LED_Init(const LED_HwConfig_t *hw_config);
 void LED_SetColor(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b);
 void LED_Update(void);
 
 void LED_SetEffect(LED_Effect_t effect, uint8_t r, uint8_t g, uint8_t b);
-void LED_Process(void);
 
+/* Setter for flight data (breaks hard dependency from control_loop.h) */
+void LED_SetAttitudeData(float roll, float pitch);
+void LED_Process(void);

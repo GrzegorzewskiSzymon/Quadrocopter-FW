@@ -13,6 +13,7 @@
 #include "nrf24l01.h"
 #include "icm45686.h"
 #include "control_loop.h"
+#include "led.h"
 
 void BOARD_Radio_Init(void)
 {
@@ -111,4 +112,50 @@ void BOARD_IMU_Init(void)
         .RxCompleteCb = ControlLoop_Execute /* Control Loop connected as Callback */
     };
     ICM45686_Init(&imu_hw);
+}
+
+/* Bridge triggering hardware DMA transfer (hides DMA flags from led.c file) */
+static void BOARD_WS2812_Transmit(uint8_t *tx_buffer, uint32_t size)
+{
+    /* Clear interrupt flags for DMA1 stream 1 (TC & TE) */
+    DMA1->LIFCR = DMA_LIFCR_CTCIF1 | DMA_LIFCR_CTEIF1;
+    
+    SPI_Transmit_DMA(SPI4, DMA1_Stream1, tx_buffer, size);
+}
+
+void BOARD_LED_Init(void)
+{
+    /* 1. Discrete LEDs on board (Power/error signaling) */
+    GPIO_INIT(LED_RED,    GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
+    GPIO_INIT(LED_YELLOW, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
+    GPIO_INIT(LED_GREEN,  GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
+    GPIO_INIT(LED_BLUE,   GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
+
+    GPIO_RESET(LED_RED);
+    GPIO_RESET(LED_YELLOW);
+    GPIO_RESET(LED_GREEN);
+    GPIO_RESET(LED_BLUE);
+
+    /* 2. Addressable LED pins (SPI4) */
+    GPIO_INIT(LED_MOSI, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_PD);
+    GPIO_INIT_AF(LED_MOSI, 5U);
+    GPIO_INIT(LED_SCK, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
+    GPIO_INIT_AF(LED_SCK, 5U);
+
+    /* 3. Hardware configuration SPI4 */
+    SPI_Config_t led_spi_cfg = {
+        .Mode = SPI_MODE_MASTER,
+        .Direction = SPI_DIR_SIMPLEX_TX,
+        .Prescaler = (4U << SPI_CFG1_MBR_Pos),
+        .DataSize = 8U,
+        .CPOL = false,
+        .CPHA = true 
+    };
+    SPI_Init(SPI4, &led_spi_cfg);
+
+    /* 4. Injection of transmission bridge to LED driver */
+    LED_HwConfig_t led_hw = {
+        .TransmitCb = BOARD_WS2812_Transmit
+    };
+    LED_Init(&led_hw);
 }
