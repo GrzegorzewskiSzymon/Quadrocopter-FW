@@ -165,7 +165,7 @@ bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
     GPIO_RESET(RF_CSN);
 
     /* Trigger asynchronous transfer in background */
-    SPI_TransmitReceive_DMA_Stream(nrf_spi, nrf_dma_tx, nrf_dma_rx, dma_tx_buf, dma_rx_buf, 33U);
+    SPI_TransmitReceive_DMA(nrf_spi, nrf_dma_tx, nrf_dma_rx, dma_tx_buf, dma_rx_buf, 33U);
 
     return true;
 }

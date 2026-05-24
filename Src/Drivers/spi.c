@@ -90,37 +90,37 @@ void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uin
 }
 
 
-void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+void SPI_TransmitReceive_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
 {
-    /* SPI must be disabled before CFG1 register modification */
-    SPIx->CR1 &= ~SPI_CR1_SPE;
+    /* 1. Fast-Path CFG1 update: Modify only if DMA flags are missing. 
+          Hardware locks CFG1 register while SPE is set. */
+    if ((SPIx->CFG1 & (SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN)) != (SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN))
+    {
+        SPIx->CR1 &= ~SPI_CR1_SPE;
+        SPIx->CFG1 |= SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN; 
+    }
 
-    /* Absolute clearing of all status flags and errors */
+    /* 2. Absolute clear of EOT and communication error flags */
     SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
                  SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
 
-    /* BDMA RX channel configuration */
+    /* 3. Reload BDMA RX parameters (Peripheral to Memory) */
     BDMA_Rx->CCR &= ~BDMA_CCR_EN;
     BDMA_Rx->CPAR = (uint32_t)&SPIx->RXDR;
     BDMA_Rx->CM0AR = (uint32_t)rx_data; 
     BDMA_Rx->CNDTR = size;
     BDMA_Rx->CCR |= BDMA_CCR_EN;
 
-    /* BDMA TX channel configuration */
+    /* 4. Reload BDMA TX parameters (Memory to Peripheral) */
     BDMA_Tx->CCR &= ~BDMA_CCR_EN;
     BDMA_Tx->CPAR = (uint32_t)&SPIx->TXDR;
     BDMA_Tx->CM0AR = (uint32_t)tx_data;  
     BDMA_Tx->CNDTR = size;
     BDMA_Tx->CCR |= BDMA_CCR_EN;
 
-    /* Connect DMA requests to SPI state machine */
-    SPIx->CFG1 |= SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN; 
-
-    /* STM32H7 requires explicit specification of transaction size in Master mode */
+    /* 5. Arm SPI state machine and trigger frame transmission */
     SPIx->CR2 = size;
-
-    /* Start hardware Master transaction */
-    SPIx->CR1 |= SPI_CR1_SPE;
+    SPIx->CR1 |= SPI_CR1_SPE;    /* Safe overlap: Hardware ignores if already 1 */
     SPIx->CR1 |= SPI_CR1_CSTART;
 }
 
@@ -160,7 +160,7 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
     SPIx->CR1 |= SPI_CR1_CSTART;
 }
 
-void SPI_TransmitReceive_DMA_Stream(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
 {
     SPIx->CR1 &= ~SPI_CR1_SPE;
     SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 

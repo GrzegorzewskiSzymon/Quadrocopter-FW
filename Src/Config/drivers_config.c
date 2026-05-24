@@ -84,6 +84,15 @@ void BOARD_IMU_Init(void)
     GPIO_INIT_AF(IMU2_MOSI, 8U);
 
     /* 3. SPI6 Hardware Configuration */
+
+    /* * @critical SPI6 DEDICATED BUS CONSTRAINT
+     * To achieve zero-overhead DMA transactions during Flight Loop, SPI6 operates
+     * in a continuous active state (CR1_SPE = 1). The STM32H7 hardware locks the 
+     * CFG1 register (including DMAEN bits) while SPE is set.
+     * DO NOT share this bus with other devices or use blocking functions that 
+     * require CFG1 reconfiguration without explicitly disabling SPE first.
+     */
+
     SPI_Config_t spi6_cfg = {
         .Mode      = SPI_MODE_MASTER,
         .Direction = SPI_DIR_FULL_DUPLEX,
@@ -103,6 +112,8 @@ void BOARD_IMU_Init(void)
     EXTI->IMR1 |= EXTI_IMR1_IM4;
     NVIC_SetPriority(EXTI4_IRQn, 1);
     NVIC_EnableIRQ(EXTI4_IRQn);
+
+
 
     /* 5. Inject hardware configuration into IMU driver */
     ICM45686_HwConfig_t imu_hw = {

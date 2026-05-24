@@ -128,16 +128,15 @@ void ICM45686_StartDMAReadBurst(void)
     
     GPIO_RESET(IMU2_CS);
 
-    SPI_TransmitReceive_DMA(imu_spi, imu_bdma_tx, imu_bdma_rx, imu_tx_buf, imu_rx_buf, 15);
+    SPI_TransmitReceive_BDMA(imu_spi, imu_bdma_tx, imu_bdma_rx, imu_tx_buf, imu_rx_buf, 15);
 }
 
 void ICM45686_DMA_RxComplete_Callback(void)
 {
+    /* Close SPI session to release the slave device */
     GPIO_SET(IMU2_CS);
 
-    imu_spi->CR1 &= ~SPI_CR1_SPE;
-    imu_spi->CFG1 &= ~(SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN);
-
+    /* Invalidate D-Cache to fetch physical RAM data updated by BDMA */
     SCB_InvalidateDCache_by_Addr((uint32_t*)imu_rx_buf, 32);
 
     imu_data_latest.accel[0] = (int16_t)((imu_rx_buf[2]  << 8) | imu_rx_buf[1]);
