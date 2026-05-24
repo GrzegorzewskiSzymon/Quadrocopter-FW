@@ -93,17 +93,3 @@ void GPIO_NRF_EXTI_Init(void)
     NVIC_SetPriority(EXTI1_IRQn, 3);
     NVIC_EnableIRQ(EXTI1_IRQn);
 }
-
-/* Global EXTI1 interrupt handler */
-void EXTI1_IRQHandler(void)
-{
-    /* Check and clear hardware interrupt flag from line 1 */
-    if (EXTI->PR1 & EXTI_PR1_PR1)
-    {
-        EXTI->PR1 = EXTI_PR1_PR1; 
-
-        /* Pass action to device layer */
-        extern void NRF24_EXTI_Callback(void);
-        NRF24_EXTI_Callback();
-    }
-}

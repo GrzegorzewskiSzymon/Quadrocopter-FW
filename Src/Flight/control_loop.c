@@ -59,15 +59,3 @@ void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
 
 
 }
-
-void EXTI4_IRQHandler(void)
-{
-    /* Quick flag check and clear (Zero-Overhead) */
-    if (EXTI->PR1 & EXTI_PR1_PR4)
-    {
-        EXTI->PR1 = EXTI_PR1_PR4; /* rc_w1 clears the flag */
-        
-        /* Start non-blocking DMA background transaction */
-        ICM45686_StartDMAReadBurst();
-    }
-}

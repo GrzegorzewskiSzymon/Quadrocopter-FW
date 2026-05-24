@@ -159,3 +159,72 @@ void BOARD_LED_Init(void)
     };
     LED_Init(&led_hw);
 }
+
+/* ========================================================================= */
+/* ALL INTERRUPT SERVICE ROUTINES (ISR)                                          */
+/* ========================================================================= */
+
+/**
+ * @trigger BDMA Channel 0 (D3 Domain) triggered by SPI6 RXNE event.
+ * @flow   Delegates raw payload processing to ICM45686 driver -> triggers Flight Loop.
+ */
+
+void BDMA_CH0_IRQHandler(void)
+{
+    /* Standard transfer completion handling */
+    if (BDMA->ISR & BDMA_ISR_TCIF0)
+    {
+        BDMA->IFCR = BDMA_IFCR_CGIF0 | BDMA_IFCR_CTCIF0;
+        ICM45686_DMA_RxComplete_Callback();
+    }
+}
+
+/**
+ * @trigger DMA1 Stream2 (D2 Domain) (SPI3 RXNE event) transfer complete (NRF24 TX payload sent).
+ * @flow   Delegates to NRF24 driver to finalize transaction
+ */
+
+void DMA_STR2_IRQHandler(void)
+{
+    /* Transfer Complete Interrupt for SPI3 RX */
+    if (DMA1->LISR & DMA_LISR_TCIF2)
+    {
+        DMA1->LIFCR = DMA_LIFCR_CTCIF2; /* Clear flag */
+        
+        NRF24_DMA_RxComplete_Callback();
+    }
+}
+
+/**
+ * @brief  NRF24L01+ Hardware Interrupt handler.
+ * @trigger Falling edge on RF_IRQ pin (mapped to EXTI Line 1).
+ * @flow   Triggers NRF24 EXTI state machine to check status (TX_DS / MAX_RT) and flush buffers.
+ */
+void EXTI1_IRQHandler(void)
+{
+    /* Check and clear hardware interrupt flag from line 1 */
+    if (EXTI->PR1 & EXTI_PR1_PR1)
+    {
+        EXTI->PR1 = EXTI_PR1_PR1; 
+
+        NRF24_EXTI_Callback();
+    }
+}
+
+/**
+ * @trigger Rising edge on IMU2_INT pin (mapped to EXTI Line 4).
+ * @flow   Initiates non-blocking BDMA background transaction to fetch IMU registers.
+ * @critical Must be executed with minimal latency to ensure control loop determinism.
+ */
+ 
+void EXTI4_IRQHandler(void)
+{
+    /* Quick flag check and clear (Zero-Overhead) */
+    if (EXTI->PR1 & EXTI_PR1_PR4)
+    {
+        EXTI->PR1 = EXTI_PR1_PR4; /* rc_w1 clears the flag */
+        
+        /* Start non-blocking DMA background transaction */
+        ICM45686_StartDMAReadBurst();
+    }
+}

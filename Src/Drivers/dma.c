@@ -69,36 +69,3 @@ void DMA1_Init(void)
     NVIC_SetPriority(DMA1_Stream2_IRQn, 2);
     NVIC_EnableIRQ(DMA1_Stream2_IRQn);
 }
-
-
-void BDMA_CH0_IRQHandler(void)
-{
-    /* 1. Check critical bus error (e.g., buffer outside D3 domain) */
-    if (BDMA->ISR & BDMA_ISR_TEIF0)
-    {
-        BDMA->IFCR = BDMA_IFCR_CTEIF0;
-        /* Debugger trap - if code enters here, buffers are NOT in SRAM4! */
-        __asm volatile("bkpt #0"); 
-    }
-
-    /* 2. Standard transfer completion handling */
-    if (BDMA->ISR & BDMA_ISR_TCIF0)
-    {
-        BDMA->IFCR = BDMA_IFCR_CGIF0 | BDMA_IFCR_CTCIF0;
-        ICM45686_DMA_RxComplete_Callback();
-    }
-}
-
-/* DMA1 Stream2 */
-void DMA_STR2_IRQHandler(void)
-{
-    /* Transfer Complete Interrupt for SPI3 RX */
-    if (DMA1->LISR & DMA_LISR_TCIF2)
-    {
-        DMA1->LIFCR = DMA_LIFCR_CTCIF2; /* Clear flag */
-        
-        /* Call hardware callback for NRF */
-        extern void NRF24_DMA_RxComplete_Callback(void);
-        NRF24_DMA_RxComplete_Callback();
-    }
-}
