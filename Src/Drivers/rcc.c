@@ -78,3 +78,50 @@ void RCC_Init(void)
     /* Wait until system uses PLL1 as its clock source */
     while ((RCC->CFGR & RCC_CFGR_SWS) != (3 << RCC_CFGR_SWS_Pos)) {}
 }
+
+
+void RCC_EnableSPIClock(SPI_TypeDef *SPIx)
+{
+    if (SPIx == SPI1)
+    {
+        RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+        (void)RCC->APB2ENR; /* DSB/ISB alternative */
+        RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST;
+        RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI1RST;
+    }
+    else if (SPIx == SPI2)
+    {
+        RCC->APB1LENR |= RCC_APB1LENR_SPI2EN;
+        (void)RCC->APB1LENR;
+        RCC->APB1LRSTR |= RCC_APB1LRSTR_SPI2RST;
+        RCC->APB1LRSTR &= ~RCC_APB1LRSTR_SPI2RST;
+    }
+    else if (SPIx == SPI3)
+    {
+        RCC->APB1LENR |= RCC_APB1LENR_SPI3EN;
+        (void)RCC->APB1LENR;
+        RCC->APB1LRSTR |= RCC_APB1LRSTR_SPI3RST;
+        RCC->APB1LRSTR &= ~RCC_APB1LRSTR_SPI3RST;
+    }
+    else if (SPIx == SPI4)
+    {
+        RCC->APB2ENR |= RCC_APB2ENR_SPI4EN;
+        (void)RCC->APB2ENR;
+        RCC->APB2RSTR |= RCC_APB2RSTR_SPI4RST;
+        RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI4RST;
+    }
+    else if (SPIx == SPI5)
+    {
+        RCC->APB2ENR |= RCC_APB2ENR_SPI5EN;
+        (void)RCC->APB2ENR;
+        RCC->APB2RSTR |= RCC_APB2RSTR_SPI5RST;
+        RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI5RST;
+    }
+    else if (SPIx == SPI6)
+    {
+        RCC->APB4ENR |= RCC_APB4ENR_SPI6EN;
+        (void)RCC->APB4ENR;
+        RCC->APB4RSTR |= RCC_APB4RSTR_SPI6RST;
+        RCC->APB4RSTR &= ~RCC_APB4RSTR_SPI6RST;
+    }
+}

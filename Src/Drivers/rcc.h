@@ -17,3 +17,6 @@
  * Must be called early in main() before any other peripheral initialization.
  */
 void RCC_Init(void);
+
+
+void RCC_EnableSPIClock(SPI_TypeDef *SPIx);

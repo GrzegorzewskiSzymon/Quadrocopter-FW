@@ -14,13 +14,14 @@
 #include "icm45686.h"
 #include "control_loop.h"
 #include "led.h"
+#include "rcc.h"
 
 void BOARD_Radio_Init(void)
 {
     /* 1. Clocks */
     RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN | RCC_AHB4ENR_GPIOCEN | RCC_AHB4ENR_GPIODEN;
-    RCC->APB1LENR |= RCC_APB1LENR_SPI3EN;
     (void)RCC->AHB4ENR; /* DSB/ISB alternative */
+    RCC_EnableSPIClock(SPI3);
 
     /* 2. SPI3 Pins */
     GPIO_INIT(RF_SCK, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
@@ -68,10 +69,10 @@ void BOARD_Radio_Init(void)
 
 void BOARD_IMU_Init(void)
 {
-    /* 1. Clocks (For now, eventually in BOARD_Clocks_Init) */
+    /* 1. Clocks */
     RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;
-    RCC->APB4ENR |= RCC_APB4ENR_SPI6EN;
     (void)RCC->APB4ENR; 
+    RCC_EnableSPIClock(SPI6);
 
     /* 2. SPI6 Pins (ICM45686) */
     GPIO_INIT(IMU2_CS, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
@@ -136,7 +137,10 @@ static void BOARD_WS2812_Transmit(uint8_t *tx_buffer, uint32_t size)
 
 void BOARD_LED_Init(void)
 {
-    /* 1. Discrete LEDs on board (Power/error signaling) */
+    /* 1. Clocks */
+    RCC_EnableSPIClock(SPI4);
+
+    /* 2. Discrete LEDs on board (Power/error signaling) */
     GPIO_INIT(LED_RED,    GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
     GPIO_INIT(LED_YELLOW, GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
     GPIO_INIT(LED_GREEN,  GPIO_MODE_OUTPUT, GPIO_OTYPE_PP, GPIO_SPEED_LOW, GPIO_PUPD_PD);
@@ -147,13 +151,13 @@ void BOARD_LED_Init(void)
     GPIO_RESET(LED_GREEN);
     GPIO_RESET(LED_BLUE);
 
-    /* 2. Addressable LED pins (SPI4) */
+    /* 3. Addressable LED pins (SPI4) */
     GPIO_INIT(LED_MOSI, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_PD);
     GPIO_INIT_AF(LED_MOSI, 5U);
     GPIO_INIT(LED_SCK, GPIO_MODE_AF, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
     GPIO_INIT_AF(LED_SCK, 5U);
 
-    /* 3. Hardware configuration SPI4 */
+    /* 4. Hardware configuration SPI4 */
     SPI_Config_t led_spi_cfg = {
         .Mode = SPI_MODE_MASTER,
         .Direction = SPI_DIR_SIMPLEX_TX,
@@ -164,7 +168,7 @@ void BOARD_LED_Init(void)
     };
     SPI_Init(SPI4, &led_spi_cfg);
 
-    /* 4. Injection of transmission bridge to LED driver */
+    /* 5. Injection of transmission bridge to LED driver */
     LED_HwConfig_t led_hw = {
         .TransmitCb = BOARD_WS2812_Transmit
     };

@@ -8,24 +8,6 @@
 
 void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config)
 {
-    /* Temporary solution for SPI4 & SPI6 TODO: RCC driver */
-    if (SPIx == SPI4) {
-        RCC->APB2ENR |= RCC_APB2ENR_SPI4EN;
-        (void)RCC->APB2ENR;
-        RCC->APB2RSTR |= RCC_APB2RSTR_SPI4RST;
-        (void)RCC->APB2RSTR; 
-        RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI4RST;
-        (void)RCC->APB2RSTR; 
-    }
-    else if (SPIx == SPI6) {
-        RCC->APB4ENR |= RCC_APB4ENR_SPI6EN;
-        (void)RCC->APB4ENR;
-        RCC->APB4RSTR |= RCC_APB4RSTR_SPI6RST;
-        (void)RCC->APB4RSTR; 
-        RCC->APB4RSTR &= ~RCC_APB4RSTR_SPI6RST;
-        (void)RCC->APB4RSTR; 
-    }
-
     SPIx->CR1 &= ~SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_SSI;
 
