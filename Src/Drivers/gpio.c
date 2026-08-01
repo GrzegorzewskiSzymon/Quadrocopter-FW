@@ -66,12 +66,6 @@ void GPIO_InitClocks(void)
     (void)RCC->AHB4ENR;
 }
 
-void NRF24_HW_Delay_us(uint32_t us)
-{
-    /* Pure in-line blocking delay. For 550 MHz: ~183 loop instructions / us */
-    volatile uint32_t count = us * (550U / 3U);
-    while (count--) { __NOP(); }
-}
 
 /* Configuration of EXTI for PD1 (RF_IRQ) */
 void GPIO_NRF_EXTI_Init(void)

@@ -10,6 +10,7 @@
 #include "spi.h"
 #include "gpio.h"
 #include "stddef.h"
+#include "systick.h"
 
 /* --- MACROS --- */
 #define NRF_CMD_W_REGISTER    0x20U
@@ -91,8 +92,7 @@ static void NRF24_Setup(void)
     NRF_WriteReg(NRF_REG_CONFIG, NRF_CONFIG_PWR_UP);
     
     /* Time for T_pd2stby (max 1.5ms) - defined in external delay module */
-    extern void NRF24_HW_Delay_us(uint32_t us);
-    NRF24_HW_Delay_us(2000U); 
+    Delay_ms(2U); 
 
     /* 2. Disable Auto-ACK and retransmission */
     NRF_WriteReg(NRF_REG_EN_AA, 0x00U);
@@ -172,6 +172,9 @@ bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
 
 /* --- STATE MACHINE INTERRUPT HANDLING --- */
 
+/**
+ * @trigger DMA1 Stream2 (D2 Domain) (SPI3 RXNE event) transfer complete (NRF24 TX payload sent).
+ */
 void NRF24_DMA_RxComplete_Callback(void)
 {
     /* 1. SPI transaction completed - close CSN barrier */
@@ -184,12 +187,6 @@ void NRF24_DMA_RxComplete_Callback(void)
     GPIO_SET(RF_TXEN);
     GPIO_RESET(RF_RXEN);
     
-    GPIO_SET(RF_CE);
-    
-    extern void NRF24_HW_Delay_us(uint32_t us);
-    NRF24_HW_Delay_us(15U); 
-    
-    GPIO_RESET(RF_CE);
 }
 
 void NRF24_EXTI_Callback(void)
