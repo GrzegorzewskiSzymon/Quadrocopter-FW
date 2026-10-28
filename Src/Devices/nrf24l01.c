@@ -10,6 +10,7 @@
 #include "spi.h"
 #include "gpio.h"
 #include "stddef.h"
+#include <string.h>
 #include "systick.h"
 
 /* --- MACROS --- */
@@ -32,8 +33,7 @@
 #define NRF_STATUS_MAX_RT     (1U << 4U)
 
 /* --- INTERNAL VARIABLES --- */
-static volatile NRF24_State_t current_state = NRF_STATE_IDLE;
-
+static volatile NRF24_State_t nrf_current_state = NRF_STATE_IDLE;
 /* Pointers to MCU domain hardware (Dependency Injection) */
 static SPI_TypeDef *nrf_spi = NULL;
 static DMA_Stream_TypeDef *nrf_dma_tx = NULL;
@@ -126,7 +126,7 @@ void NRF24_Init(const NRF24_HwConfig_t *hw_config)
     nrf_dma_tx = hw_config->DMA_Tx;
     nrf_dma_rx = hw_config->DMA_Rx;
     
-    current_state = NRF_STATE_IDLE;
+    nrf_current_state = NRF_STATE_IDLE;
     
     /* 2. Register configuration */
     NRF24_Setup();
@@ -134,37 +134,21 @@ void NRF24_Init(const NRF24_HwConfig_t *hw_config)
 
 bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
 {
-    if (current_state != NRF_STATE_IDLE) {
-        return false; /* Protection against overwriting in flight */
+    if (nrf_current_state != NRF_STATE_IDLE) {
+        return false;
     }
+    nrf_current_state = NRF_STATE_TX_SPI_BUSY;
 
-    current_state = NRF_STATE_TX_SPI_BUSY;
-
-/* DMA buffer preparation: [COMMAND] [32 BYTES PAYLOAD] */
+    /* DMA buffer preparation: [COMMAND] [32 BYTES PAYLOAD] */
     dma_tx_buf[0] = NRF_CMD_W_TX_PAYLOAD;
-    const uint8_t *p_data = (const uint8_t *)payload;
     
-    /* Compile-time evaluation of struct size */
-    const uint8_t payload_len = (uint8_t)sizeof(NRF24_Payload_t);
-    uint8_t i = 0U;
+    /* Fixed-size copy is inlined by GCC; &dma_tx_buf[1] is unaligned, so word pointer
+       casts could be merged into STRD/STM, which fault on unaligned addresses */
+    memcpy(&dma_tx_buf[1], payload, sizeof(NRF24_Payload_t));
 
-    /* 1. Copy valid payload data (preventing out-of-bounds read) */
-    for (; i < payload_len; i++) {
-        dma_tx_buf[i + 1U] = p_data[i];
-    }
-
-    /* 2. Pad the remaining buffer with zeros to strictly meet 32-byte width */
-    for (; i < 32U; i++) {
-        dma_tx_buf[i + 1U] = 0x00U;
-    }
-
-    /* Push CPU changes from D-Cache to Main Memory (SRAM4) */
     SCB_CleanDCache_by_Addr((uint32_t*)dma_tx_buf, 33U);
 
-    /* Open SPI session */
     GPIO_RESET(RF_CSN);
-
-    /* Trigger asynchronous transfer in background */
     SPI_TransmitReceive_DMA(nrf_spi, nrf_dma_tx, nrf_dma_rx, dma_tx_buf, dma_rx_buf, 33U);
 
     return true;
@@ -182,7 +166,7 @@ void NRF24_DMA_RxComplete_Callback(void)
     SPI_CloseTransfer_DMA(nrf_spi);
 
     /* 2. Transition to waiting mode for the air */
-    current_state = NRF_STATE_TX_AIR_BUSY;
+    nrf_current_state = NRF_STATE_TX_AIR_BUSY;
 
     /* 3. Enable PA RFX2401C and pulse CE */
     GPIO_SET(RF_TXEN);
@@ -207,10 +191,10 @@ void NRF24_EXTI_Callback(void)
     }
 
     /* 4. Return to IDLE - state machine ready for new frame from Scheduler */
-    current_state = NRF_STATE_IDLE;
+    nrf_current_state = NRF_STATE_IDLE;
 }
 
 NRF24_State_t NRF24_GetState(void)
 {
-    return current_state;
+    return nrf_current_state;
 }

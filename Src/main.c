@@ -27,23 +27,11 @@ int main(void)
     /* 2. Devices bring-up */
     BOARD_LED_Init();
     BOARD_IMU_Init();
-    // NRF24_Test_Init();
     BOARD_Radio_Init();
-    NRF24_Payload_t test_payload = {
-        .aileron = 1500U,
-        .elevator = 1500U,
-        .throttle = 1000U,
-        .rudder = 1500U,
-        .switches_a = 0x01U, /* Armed */
-        .switches_b = 0x00U, /* Beeper off, OSD off */
-        .telemetry_req = 0x00U /* No telemetry requested */
-    };
-    NRF24_Transmit_IT(&test_payload);
+
+
     for(;;)
     {
         Scheduler_Run();
-
-
-
     }
 }

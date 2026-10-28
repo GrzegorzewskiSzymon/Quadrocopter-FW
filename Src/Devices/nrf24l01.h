@@ -10,6 +10,7 @@
 #include "stm32h723xx.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "nrf24_payload.h"
 
 /* ========================================================================= */
 /* DATA TYPES & CONFIGURATION                                                */
@@ -28,16 +29,6 @@ typedef struct {
     DMA_Stream_TypeDef  *DMA_Rx;
 } NRF24_HwConfig_t;
 
-/* Radio frame structure  */
-typedef struct {
-    uint16_t aileron;
-    uint16_t elevator;
-    uint16_t throttle;
-    uint16_t rudder;
-    uint8_t  switches_a;
-    uint8_t  switches_b;
-    uint8_t  telemetry_req;
-} __attribute__((packed)) NRF24_Payload_t;
 
 /* ========================================================================= */
 /* PUBLIC API                                                                */
