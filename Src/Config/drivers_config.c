@@ -49,7 +49,8 @@ void BOARD_Radio_Init(void)
         .Prescaler = (4U << SPI_CFG1_MBR_Pos), 
         .DataSize = 8,
         .CPOL = false,
-        .CPHA = false
+        .CPHA = false,
+        .HoldPinsWhenDisabled = true /* SPE is toggled while CSN is low */
     };
     SPI_Init(SPI3, &spi3_cfg);
 
@@ -87,21 +88,14 @@ Status_t BOARD_IMU_Init(void)
 
     /* 3. SPI6 Hardware Configuration */
 
-    /* * @critical SPI6 DEDICATED BUS CONSTRAINT
-     * To achieve zero-overhead DMA transactions during Flight Loop, SPI6 operates
-     * in a continuous active state (CR1_SPE = 1). The STM32H7 hardware locks the 
-     * CFG1 register (including DMAEN bits) while SPE is set.
-     * DO NOT share this bus with other devices or use blocking functions that 
-     * require CFG1 reconfiguration without explicitly disabling SPE first.
-     */
-
     SPI_Config_t spi6_cfg = {
         .Mode      = SPI_MODE_MASTER,
         .Direction = SPI_DIR_FULL_DUPLEX,
         .Prescaler = (4U << SPI_CFG1_MBR_Pos), /* MBR=4 -> prescaler /32 */
         .DataSize  = 8,
         .CPOL      = true,
-        .CPHA      = true
+        .CPHA      = true,
+        .HoldPinsWhenDisabled = true /* SPE is toggled while CS is low */
     };
     SPI_Init(SPI6, &spi6_cfg);
 
@@ -175,7 +169,8 @@ void BOARD_LED_Init(void)
         .Prescaler = (4U << SPI_CFG1_MBR_Pos),
         .DataSize = 8U,
         .CPOL = false,
-        .CPHA = true 
+        .CPHA = true,
+        .HoldPinsWhenDisabled = false /* WS2812 needs MOSI idle low; level held by AFCNTR not verified */
     };
     SPI_Init(SPI4, &led_spi_cfg);
 

@@ -29,6 +29,8 @@ typedef struct {
     uint8_t         DataSize;
     bool            CPOL;
     bool            CPHA;
+    bool            HoldPinsWhenDisabled; /* AFCNTR: keep SCK/MOSI driven while SPE=0; needed when
+                                             SPE is toggled with the slave selected (master only) */
 } SPI_Config_t;
 
 void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config);
@@ -47,5 +49,5 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
 /* Additional function for standard DMA streams (D1/D2 Domain) */
 void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
 
-/* Ends a DMA session: detaches DMA requests so blocking calls can safely reuse the bus */
+/* Ends a DMA session: disables the SPI and detaches its DMA requests */
 void SPI_CloseTransfer_DMA(SPI_TypeDef *SPIx);
