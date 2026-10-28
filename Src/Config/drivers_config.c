@@ -204,8 +204,11 @@ void DMA_STR2_IRQHandler(void)
     /* Transfer Complete Interrupt for SPI3 RX */
     if (DMA1->LISR & DMA_LISR_TCIF2)
     {
-        DMA1->LIFCR = DMA_LIFCR_CTCIF2; /* Clear flag */
-        
+        /* Clear ALL flags of RX (Stream2) and TX (Stream3). Hardware refuses to set EN
+           on a stream with stale flags, so a leftover TCIF3 would block the next TX. */
+        DMA1->LIFCR = DMA_LIFCR_CTCIF2 | DMA_LIFCR_CHTIF2 | DMA_LIFCR_CTEIF2 | DMA_LIFCR_CDMEIF2 | DMA_LIFCR_CFEIF2
+                    | DMA_LIFCR_CTCIF3 | DMA_LIFCR_CHTIF3 | DMA_LIFCR_CTEIF3 | DMA_LIFCR_CDMEIF3 | DMA_LIFCR_CFEIF3;
+
         NRF24_DMA_RxComplete_Callback();
     }
 }

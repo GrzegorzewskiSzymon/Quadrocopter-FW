@@ -145,8 +145,14 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
 void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
 {
     SPIx->CR1 &= ~SPI_CR1_SPE;
-    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC |
                  SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    /* Drop DMA requests left over from the previous transfer, otherwise the RX stream
+       drains the empty RXDR as soon as it is enabled (RM0468 SPI DMA sequence:
+       RXDMAEN -> enable streams -> TXDMAEN -> SPE) */
+    SPIx->CFG1 &= ~(SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN);
+    SPIx->CFG1 |= SPI_CFG1_RXDMAEN;
 
     /* RX DMA Configuration */
     DMA_Rx->CR &= ~DMA_SxCR_EN;
@@ -164,9 +170,21 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_
     DMA_Tx->NDTR = size;
     DMA_Tx->CR |= DMA_SxCR_EN;
 
-    SPIx->CFG1 |= SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN; 
+    SPIx->CFG1 |= SPI_CFG1_TXDMAEN;
     SPIx->CR2 = size;
 
     SPIx->CR1 |= SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_CSTART;
+}
+
+void SPI_CloseTransfer_DMA(SPI_TypeDef *SPIx)
+{
+    /* CFG1 is locked while SPE is set */
+    SPIx->CR1 &= ~SPI_CR1_SPE;
+    SPIx->CFG1 &= ~(SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN);
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | 
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+
+    /* Blocking routines expect the peripheral to stay enabled */
+    SPIx->CR1 |= SPI_CR1_SPE;
 }

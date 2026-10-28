@@ -42,3 +42,6 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
 
 /* Additional function for standard DMA streams (D1/D2 Domain) */
 void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
+
+/* Ends a DMA session: detaches DMA requests so blocking calls can safely reuse the bus */
+void SPI_CloseTransfer_DMA(SPI_TypeDef *SPIx);

@@ -179,6 +179,7 @@ void NRF24_DMA_RxComplete_Callback(void)
 {
     /* 1. SPI transaction completed - close CSN barrier */
     GPIO_SET(RF_CSN);
+    SPI_CloseTransfer_DMA(nrf_spi);
 
     /* 2. Transition to waiting mode for the air */
     current_state = NRF_STATE_TX_AIR_BUSY;
