@@ -8,6 +8,11 @@
 #include "control_loop.h"
 #include "stm32h723xx.h"
 #include <math.h>
+#include "icm45686.h"
+#include "nrf24_payload.h"
+#include "telemetry_queue.h"
+#include "fsm.h"
+#include "systick.h"
 
 /* TODO: Include FSM, IMU, ESC (Timer CCR) headers */
 
@@ -20,6 +25,31 @@ float acc_pitch;
 float roll, pitch;
 
 void ControlLoop_Execute(ICM45686_Data_t *imu_data) {
+
+    if (FSM_GetState() == FSM_STATE_DEBUG)
+    {
+        static uint8_t seq = 0U;
+        NRF24_Payload_t debug_payload = {0};
+
+        /* Prepare header */
+        debug_payload.packet_type = NRF24_PACKET_DEBUG_IMU;
+        debug_payload.seq_num     = seq++;
+        debug_payload.reserved    = 0x0000U;
+
+        /* Load IMU Data */
+        debug_payload.data.imu.timestamp_ms = sys_tick_ms;
+        debug_payload.data.imu.accel[0]     = imu_data->accel[0];
+        debug_payload.data.imu.accel[1]     = imu_data->accel[1];
+        debug_payload.data.imu.accel[2]     = imu_data->accel[2];
+        debug_payload.data.imu.gyro[0]      = imu_data->gyro[0];
+        debug_payload.data.imu.gyro[1]      = imu_data->gyro[1];
+        debug_payload.data.imu.gyro[2]      = imu_data->gyro[2];
+        debug_payload.data.imu.temp         = imu_data->temp;
+
+        /* Push to transmission pipeline */
+        TelemetryQueue_Push(&debug_payload);
+    }
+
     /* * CRITICAL EXECUTION PATH - ZERO BLOCKING CALLS
      * Triggered from hardware interrupt (e.g., DMA_TC for SPI)
      */

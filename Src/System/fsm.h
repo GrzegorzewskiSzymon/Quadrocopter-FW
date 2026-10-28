@@ -12,7 +12,8 @@ typedef enum {
     FSM_STATE_INIT = 0,
     FSM_STATE_DISARMED,
     FSM_STATE_ARMED,
-    FSM_STATE_FAILSAFE
+    FSM_STATE_FAILSAFE,
+    FSM_STATE_DEBUG
 } fsm_state_t;
 
 void FSM_Init(void);

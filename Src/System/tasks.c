@@ -9,10 +9,11 @@
 #include "led.h"
 #include "nrf24l01.h"
 #include "telemetry_queue.h"
+#include "fsm.h"
 
 
 void Task_FSM_Update(void) {
-    /* TODO: Call FSM_Update() */
+    FSM_Update();
 }
 
 void Task_Baro(void) {

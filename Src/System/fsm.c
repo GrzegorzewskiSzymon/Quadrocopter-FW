@@ -18,6 +18,10 @@ void FSM_Init(void) {
 void FSM_Update(void) {
     /* State machine transition logic */
     switch (current_state) {
+        case FSM_STATE_INIT:
+            current_state = FSM_STATE_DEBUG; //TODO: Change to DISARMED after testing
+            break;
+
         case FSM_STATE_DISARMED:
             /* TODO: if (RC_Arm_Condition_Met) current_state = FSM_STATE_ARMED; */
             break;
@@ -29,6 +33,10 @@ void FSM_Update(void) {
 
         case FSM_STATE_FAILSAFE:
             /* TODO: Handle recovery or lock down */
+            break;
+        
+        case FSM_STATE_DEBUG:
+
             break;
 
         default:
