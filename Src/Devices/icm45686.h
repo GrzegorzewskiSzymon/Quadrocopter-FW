@@ -10,6 +10,7 @@
 #include "stm32h723xx.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "status.h"
 
 /* =========================================================================
  * Bank 0 Registers & Constants
@@ -59,10 +60,10 @@ typedef struct {
 /* =========================================================================
  * Function Declarations
  * ========================================================================= */
-void    ICM45686_Init(const ICM45686_HwConfig_t *hw_config);
-void    ICM45686_WriteRegister(uint8_t reg, uint8_t value);
-void    ICM45686_Config(void);
-bool    ICM45686_IsDataReady(void);
-void    ICM45686_ReadDataBurst(ICM45686_Data_t *data);
-void    ICM45686_StartDMAReadBurst(void);
-void    ICM45686_DMA_RxComplete_Callback(void);
+Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config);
+void     ICM45686_WriteRegister(uint8_t reg, uint8_t value);
+void     ICM45686_Config(void);
+bool     ICM45686_IsDataReady(void);
+void     ICM45686_ReadDataBurst(ICM45686_Data_t *data);
+void     ICM45686_StartDMAReadBurst(void);
+void     ICM45686_DMA_RxComplete_Callback(void);

@@ -40,7 +40,7 @@ static inline uint8_t ICM45686_ReadRegister(uint8_t reg)
 
 /* --- PUBLIC API IMPLEMENTATION --- */
 
-void ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
+Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
 {
     /* 1. Store hardware configuration (Dependency Injection) */
     imu_spi = hw_config->SPIx;
@@ -58,12 +58,13 @@ void ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
     
     if (who_am_i != ICM45686_WHO_AM_I_VAL)
     {
-        /* Fatal error: Sensor not detected or SPI failure. Trap execution. */
-        while (1) { }
+        return STATUS_ERR_NO_DEVICE;
     }
 
     /* 4. Configure IMU Internal Registers for DRDY Interrupt */
     ICM45686_Config();
+
+    return STATUS_OK;
 }
 
 void ICM45686_WriteRegister(uint8_t reg, uint8_t value)

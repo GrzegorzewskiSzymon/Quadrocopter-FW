@@ -14,7 +14,7 @@
 #include "icm45686.h"
 #include "scheduler.h"
 #include "nrf24l01.h"
-#include "drivers_config.h"
+#include "fsm.h"
 
 
 int main(void)
@@ -26,7 +26,11 @@ int main(void)
 
     /* 2. Devices bring-up */
     BOARD_LED_Init();
-    BOARD_IMU_Init();
+    if (BOARD_IMU_Init() != STATUS_OK)
+    {
+        /* Keep running so the fault can be signalled and reported over the radio */
+        FSM_EnterFailsafe();
+    }
     BOARD_Radio_Init();
 
 

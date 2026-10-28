@@ -17,5 +17,6 @@ typedef enum {
 } fsm_state_t;
 
 void FSM_Init(void);
+void FSM_EnterFailsafe(void);
 void FSM_Update(void);
 fsm_state_t FSM_GetState(void);

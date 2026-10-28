@@ -83,6 +83,10 @@ void GPIO_NRF_EXTI_Init(void)
     /* Configure falling edge trigger (NRF pulls line to GND) */
     EXTI->FTSR1 |= EXTI_FTSR1_TR1;
 
+    /* Drop edges latched while the radio was powering up */
+    EXTI->PR1 = EXTI_PR1_PR1;
+    NVIC_ClearPendingIRQ(EXTI1_IRQn);
+
     /* Set priority in NVIC (Lower than DMA, higher than Scheduler) */
     NVIC_SetPriority(EXTI1_IRQn, 3);
     NVIC_EnableIRQ(EXTI1_IRQn);

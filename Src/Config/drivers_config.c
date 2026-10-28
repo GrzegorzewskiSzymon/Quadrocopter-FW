@@ -53,21 +53,22 @@ void BOARD_Radio_Init(void)
     };
     SPI_Init(SPI3, &spi3_cfg);
 
-    /* 5. EXTI Interrupt from NRF */
-    extern void GPIO_NRF_EXTI_Init(void); // Temporarily, eventually EXTI will also be moved to board_init
-    GPIO_NRF_EXTI_Init();
-
-    /* 6. Inject hardware configuration into driver */
+    /* 5. Inject hardware configuration into driver */
     NRF24_HwConfig_t nrf_hw = {
         .SPIx = SPI3,
         .DMA_Tx = DMA1_Stream3,
         .DMA_Rx = DMA1_Stream2
     };
     NRF24_Init(&nrf_hw);
+
+    /* 6. EXTI from NRF only after the driver holds its SPI handle: an IRQ glitch
+          during power-up would otherwise run the callback on a NULL peripheral */
+    extern void GPIO_NRF_EXTI_Init(void); // Temporarily, eventually EXTI will also be moved to board_init
+    GPIO_NRF_EXTI_Init();
 }
 
 
-void BOARD_IMU_Init(void)
+Status_t BOARD_IMU_Init(void)
 {
     /* 1. Clocks */
     RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;
@@ -104,17 +105,12 @@ void BOARD_IMU_Init(void)
     };
     SPI_Init(SPI6, &spi6_cfg);
 
-    /* 4. Interrupt Pin Configuration (PA4) and EXTI4 */
+    /* 4. Interrupt Pin Configuration (PA4) and EXTI4 routing; line stays masked for now */
     GPIO_INIT(IMU2_INT, GPIO_MODE_INPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
     SYSCFG->EXTICR[1] &= ~SYSCFG_EXTICR2_EXTI4_Msk;
     SYSCFG->EXTICR[1] |= (0x00U << SYSCFG_EXTICR2_EXTI4_Pos); /* Port A */
     EXTI->RTSR1 |= EXTI_RTSR1_TR4;
     EXTI->FTSR1 &= ~EXTI_FTSR1_TR4;
-    EXTI->IMR1 |= EXTI_IMR1_IM4;
-    NVIC_SetPriority(EXTI4_IRQn, 1);
-    NVIC_EnableIRQ(EXTI4_IRQn);
-
-
 
     /* 5. Inject hardware configuration into IMU driver */
     ICM45686_HwConfig_t imu_hw = {
@@ -123,7 +119,22 @@ void BOARD_IMU_Init(void)
         .BDMA_Rx = BDMA_Channel0,
         .RxCompleteCb = ControlLoop_Execute /* Control Loop connected as Callback */
     };
-    ICM45686_Init(&imu_hw);
+    Status_t status = ICM45686_Init(&imu_hw);
+    if (status != STATUS_OK)
+    {
+        /* DRDY stays masked: no DMA burst may run against an absent or misconfigured sensor */
+        return status;
+    }
+
+    /* 6. Unmask DRDY only now: init uses blocking SPI6 transfers that a DMA burst
+          started from EXTI4 would collide with. Drop edges latched during init. */
+    EXTI->PR1 = EXTI_PR1_PR4;
+    NVIC_ClearPendingIRQ(EXTI4_IRQn);
+    EXTI->IMR1 |= EXTI_IMR1_IM4;
+    NVIC_SetPriority(EXTI4_IRQn, 1);
+    NVIC_EnableIRQ(EXTI4_IRQn);
+
+    return STATUS_OK;
 }
 
 /* Bridge triggering hardware DMA transfer (hides DMA flags from led.c file) */

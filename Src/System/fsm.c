@@ -15,6 +15,10 @@ void FSM_Init(void) {
     current_state = FSM_STATE_DISARMED;
 }
 
+void FSM_EnterFailsafe(void) {
+    current_state = FSM_STATE_FAILSAFE;
+}
+
 void FSM_Update(void) {
     /* State machine transition logic */
     switch (current_state) {

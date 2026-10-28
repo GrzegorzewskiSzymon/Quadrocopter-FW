@@ -38,6 +38,13 @@ void Task_LED(void)
      * fsm_state_t state = FSM_GetState();
      * switch(state) { case FSM_IDLE: ... case FSM_ARMED: ... } 
      */
-    LED_SetEffect(LED_EFFECT_ATTITUDE, 50, 0, 0);
+    if (FSM_GetState() == FSM_STATE_FAILSAFE)
+    {
+        LED_SetEffect(LED_EFFECT_STROBE, 255, 0, 0);
+    }
+    else
+    {
+        LED_SetEffect(LED_EFFECT_ATTITUDE, 50, 0, 0);
+    }
     LED_Process();
 }
