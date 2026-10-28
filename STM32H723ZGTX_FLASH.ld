@@ -49,7 +49,7 @@ MEMORY
   RAM_D1  (xrw)    : ORIGIN = 0x24000000,   LENGTH = 320K
   RAM_D2  (xrw)    : ORIGIN = 0x30000000,   LENGTH = 32K
   RAM_D3  (xrw)    : ORIGIN = 0x38000000,   LENGTH = 16K
-  SRAM4   (xrw)    : ORIGIN = 0x38000000,   LENGTH = 64K
+  SRAM4   (xrw)    : ORIGIN = 0x38000000,   LENGTH = 16K
 }
 
 /* Define output sections */
