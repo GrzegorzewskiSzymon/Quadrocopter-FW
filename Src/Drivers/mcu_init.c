@@ -11,6 +11,7 @@
 #include "gpio.h"
 #include "systick.h"
 #include "dma.h"
+#include "dwt.h"
 
 static void DBGMCU_Init(void) 
 {
@@ -31,8 +32,11 @@ static void DBGMCU_Init(void)
     */
 }
 
-void MCU_Init(void)
+Status_t MCU_Init(void)
 {
+    /* Time base for every bounded hardware wait, RCC_Init() included */
+    DWT_Init();
+
 
 /* 0. Enable hardware FPU unit (Coprocessor 10 and 11) */
     /* Set bits for full access (Full Access) */
@@ -45,7 +49,11 @@ void MCU_Init(void)
 
 
     /* 1. Initialize core system clock (550 MHz), caches and power domains */
-    RCC_Init();
+    if (RCC_Init() != STATUS_OK)
+    {
+        /* Nothing below is valid without the expected clock tree */
+        return STATUS_ERR_TIMEOUT;
+    }
 
     /* 2. Enable GPIO hardware clocks on AHB4 bus */
     GPIO_InitClocks();
@@ -61,4 +69,6 @@ void MCU_Init(void)
     BDMA_Init();
 
     DMA1_Init();
+
+    return STATUS_OK;
 }

@@ -5,6 +5,11 @@
  *      Author: Szymon Grzegorzewski
  */
 #include "spi.h"
+#include "dwt.h"
+
+/* Budget per awaited flag. One frame at the slowest prescaler (/256 of 137.5 MHz) takes ~15 us,
+   so hitting this means the peripheral is stuck, not slow */
+#define SPI_WAIT_TIMEOUT_US     1000UL
 
 #define SPI_IFCR_ALL  (SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC | SPI_IFCR_OVRC | \
                        SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC)
@@ -16,6 +21,39 @@ static inline void SPI_PrepareTransfer(SPI_TypeDef *SPIx, uint32_t size)
     SPIx->CR1 &= ~SPI_CR1_SPE;
     SPIx->IFCR = SPI_IFCR_ALL;
     SPIx->CR2 = size;
+}
+
+static Status_t SPI_WaitFlag(SPI_TypeDef *SPIx, uint32_t flag)
+{
+    uint32_t start = DWT_GetCycles();
+
+    while ((SPIx->SR & flag) == 0U)
+    {
+        if (DWT_IsElapsedUs(start, SPI_WAIT_TIMEOUT_US))
+        {
+            /* Clearing SPE stops the master and flushes the FIFOs, so the next transfer starts clean */
+            SPIx->CR1 &= ~SPI_CR1_SPE;
+            SPIx->IFCR = SPI_IFCR_ALL;
+            return STATUS_ERR_TIMEOUT;
+        }
+    }
+    return STATUS_OK;
+}
+
+/* DMA1/DMA2 ignore register writes until the stream has really stopped (RM0468 DMA_SxCR.EN) */
+static Status_t SPI_DisableDmaStream(DMA_Stream_TypeDef *stream)
+{
+    uint32_t start = DWT_GetCycles();
+
+    stream->CR &= ~DMA_SxCR_EN;
+    while ((stream->CR & DMA_SxCR_EN) != 0U)
+    {
+        if (DWT_IsElapsedUs(start, SPI_WAIT_TIMEOUT_US))
+        {
+            return STATUS_ERR_TIMEOUT;
+        }
+    }
+    return STATUS_OK;
 }
 
 void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config)
@@ -40,7 +78,7 @@ void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config)
     SPIx->CR1 |= SPI_CR1_SPE;
 }
 
-void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size)
+Status_t SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size)
 {
     SPI_PrepareTransfer(SPIx, size);
     /* Requests left from a DMA session would let a DMA stream steal FIFO data */
@@ -50,21 +88,20 @@ void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size
 
     for (uint32_t i = 0; i < size; i++)
     {
-        /* Wait for free space in TX FIFO */
-        while ((SPIx->SR & SPI_SR_TXP) == 0) { }
+        if (SPI_WaitFlag(SPIx, SPI_SR_TXP) != STATUS_OK) return STATUS_ERR_TIMEOUT;
         *((__IO uint8_t *)&SPIx->TXDR) = data[i];
 
-        /* CRITICAL: Wait for byte return and remove it from RX FIFO */
-        while ((SPIx->SR & SPI_SR_RXP) == 0) { }
-        volatile uint8_t dummy = *((__IO uint8_t *)&SPIx->RXDR);
-        (void)dummy; /* Prevents compiler warnings */
+        /* Full duplex: every sent frame returns one that must be drained from the RX FIFO */
+        if (SPI_WaitFlag(SPIx, SPI_SR_RXP) != STATUS_OK) return STATUS_ERR_TIMEOUT;
+        (void)*((__IO uint8_t *)&SPIx->RXDR);
     }
 
-    while ((SPIx->SR & SPI_SR_EOT) == 0) { }
+    if (SPI_WaitFlag(SPIx, SPI_SR_EOT) != STATUS_OK) return STATUS_ERR_TIMEOUT;
     SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC;
+    return STATUS_OK;
 }
 
-void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+Status_t SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
 {
     SPI_PrepareTransfer(SPIx, size);
     SPIx->CFG1 &= ~(SPI_CFG1_RXDMAEN | SPI_CFG1_TXDMAEN);
@@ -73,15 +110,16 @@ void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uin
 
     for (uint32_t i = 0; i < size; i++)
     {
-        while ((SPIx->SR & SPI_SR_TXP) == 0) { }
+        if (SPI_WaitFlag(SPIx, SPI_SR_TXP) != STATUS_OK) return STATUS_ERR_TIMEOUT;
         *((__IO uint8_t *)&SPIx->TXDR) = tx_data[i];
 
-        while ((SPIx->SR & SPI_SR_RXP) == 0) { }
+        if (SPI_WaitFlag(SPIx, SPI_SR_RXP) != STATUS_OK) return STATUS_ERR_TIMEOUT;
         rx_data[i] = *((__IO uint8_t *)&SPIx->RXDR);
     }
 
-    while ((SPIx->SR & SPI_SR_EOT) == 0) { }
+    if (SPI_WaitFlag(SPIx, SPI_SR_EOT) != STATUS_OK) return STATUS_ERR_TIMEOUT;
     SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC;
+    return STATUS_OK;
 }
 
 
@@ -124,7 +162,7 @@ void SPI_AbortTransfer_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BD
 }
 
 
-void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size)
+Status_t SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size)
 {
     /* 1. SPI must be disabled before CFG1 register modification */
     SPIx->CR1 &= ~SPI_CR1_SPE;
@@ -133,11 +171,7 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
     SPIx->IFCR = SPI_IFCR_ALL;
 
     /* 3. DMA stream configuration (D1/D2 Domain) */
-    DMA_Tx->CR &= ~DMA_SxCR_EN;
-    
-    /* On STM32, for classic DMA1/DMA2 we must wait until the hardware actually
-       disables the stream, otherwise register writes will be ignored. */
-    while (DMA_Tx->CR & DMA_SxCR_EN) { } 
+    if (SPI_DisableDmaStream(DMA_Tx) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     DMA_Tx->PAR  = (uint32_t)&SPIx->TXDR;
     DMA_Tx->M0AR = (uint32_t)tx_data;
@@ -156,9 +190,10 @@ void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8
     /* 6. Start hardware Master transaction - hardware will immediately trigger DMA */
     SPIx->CR1 |= SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_CSTART;
+    return STATUS_OK;
 }
 
-void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
+Status_t SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size)
 {
     SPIx->CR1 &= ~SPI_CR1_SPE;
     SPIx->IFCR = SPI_IFCR_ALL;
@@ -170,16 +205,14 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_
     SPIx->CFG1 |= SPI_CFG1_RXDMAEN;
 
     /* RX DMA Configuration */
-    DMA_Rx->CR &= ~DMA_SxCR_EN;
-    while (DMA_Rx->CR & DMA_SxCR_EN) { } 
+    if (SPI_DisableDmaStream(DMA_Rx) != STATUS_OK) return STATUS_ERR_TIMEOUT;
     DMA_Rx->PAR = (uint32_t)&SPIx->RXDR;
     DMA_Rx->M0AR = (uint32_t)rx_data;
     DMA_Rx->NDTR = size;
     DMA_Rx->CR |= DMA_SxCR_EN;
 
     /* TX DMA Configuration */
-    DMA_Tx->CR &= ~DMA_SxCR_EN;
-    while (DMA_Tx->CR & DMA_SxCR_EN) { } 
+    if (SPI_DisableDmaStream(DMA_Tx) != STATUS_OK) return STATUS_ERR_TIMEOUT;
     DMA_Tx->PAR = (uint32_t)&SPIx->TXDR;
     DMA_Tx->M0AR = (uint32_t)tx_data;
     DMA_Tx->NDTR = size;
@@ -190,6 +223,7 @@ void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_
 
     SPIx->CR1 |= SPI_CR1_SPE;
     SPIx->CR1 |= SPI_CR1_CSTART;
+    return STATUS_OK;
 }
 
 void SPI_CloseTransfer_DMA(SPI_TypeDef *SPIx)

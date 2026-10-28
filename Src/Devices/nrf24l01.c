@@ -47,24 +47,26 @@ __attribute__((aligned(32), section(".sram4"))) static uint8_t dma_rx_buf[64];
 
 /* --- PRIVATE HELPER FUNCTIONS --- */
 
-static void NRF_SendCommand(uint8_t cmd)
+static Status_t NRF_SendCommand(uint8_t cmd)
 {
     uint8_t status;
     GPIO_RESET(RF_CSN);
-    SPI_TransmitReceive_Blocking(nrf_spi, &cmd, &status, 1U);
+    Status_t result = SPI_TransmitReceive_Blocking(nrf_spi, &cmd, &status, 1U);
     GPIO_SET(RF_CSN);
+    return result;
 }
 
-static void NRF_WriteReg(uint8_t reg, uint8_t value)
+static Status_t NRF_WriteReg(uint8_t reg, uint8_t value)
 {
     uint8_t tx[2] = { NRF_CMD_W_REGISTER | (reg & 0x1FU), value };
     uint8_t rx[2];
     GPIO_RESET(RF_CSN);
-    SPI_TransmitReceive_Blocking(nrf_spi, tx, rx, 2U);
+    Status_t result = SPI_TransmitReceive_Blocking(nrf_spi, tx, rx, 2U);
     GPIO_SET(RF_CSN);
+    return result;
 }
 
-static void NRF_WriteRegMulti(uint8_t reg, const uint8_t *data, uint8_t size)
+static Status_t NRF_WriteRegMulti(uint8_t reg, const uint8_t *data, uint8_t size)
 {
     uint8_t buffer[6]; 
     buffer[0] = NRF_CMD_W_REGISTER | (reg & 0x1FU);
@@ -74,70 +76,76 @@ static void NRF_WriteRegMulti(uint8_t reg, const uint8_t *data, uint8_t size)
     }
     
     GPIO_RESET(RF_CSN);
-    SPI_Transmit_Blocking(nrf_spi, buffer, size + 1U);
+    Status_t result = SPI_Transmit_Blocking(nrf_spi, buffer, size + 1U);
     GPIO_SET(RF_CSN);
+    return result;
 }
 
-static uint8_t NRF_ReadReg(uint8_t reg)
+static Status_t NRF_ReadReg(uint8_t reg, uint8_t *value)
 {
     uint8_t tx[2] = { (reg & 0x1FU), 0x00U };
-    uint8_t rx[2];
+    uint8_t rx[2] = { 0U };
     GPIO_RESET(RF_CSN);
-    SPI_TransmitReceive_Blocking(nrf_spi, tx, rx, 2U);
+    Status_t result = SPI_TransmitReceive_Blocking(nrf_spi, tx, rx, 2U);
     GPIO_SET(RF_CSN);
-    return rx[1];
+    *value = rx[1];
+    return result;
 }
 
-static void NRF24_Setup(void)
+/* Each step runs only if all previous ones succeeded; the first error is returned */
+static Status_t NRF24_Setup(void)
 {
     /* 1. System startup (PWR_UP=1, PRIM_RX=0 -> PTX), NO CRC */
-    NRF_WriteReg(NRF_REG_CONFIG, NRF_CONFIG_PWR_UP);
+    Status_t status = NRF_WriteReg(NRF_REG_CONFIG, NRF_CONFIG_PWR_UP);
     
     /* Time for T_pd2stby (max 1.5ms) - defined in external delay module */
     Delay_ms(2U); 
 
     /* 2. Disable Auto-ACK and retransmission */
-    NRF_WriteReg(NRF_REG_EN_AA, 0x00U);
-    NRF_WriteReg(NRF_REG_SETUP_RETR, 0x00U);
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_EN_AA, 0x00U);
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_SETUP_RETR, 0x00U);
     
     /* 3. RF Configuration: Channel 76 (2476 MHz) */
-    NRF_WriteReg(NRF_REG_RF_CH, 76U);
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_RF_CH, 76U);
     
     /* 4. RF SETUP Configuration: 1 Mbps, power 0 dBm (0x06) */
-    NRF_WriteReg(NRF_REG_RF_SETUP, 0x06U);
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_RF_SETUP, 0x06U);
 
     /* 5. Pipe Address Configuration */
     const uint8_t pipe_addr[5] = {'D', 'R', 'O', 'N', '1'};
-    NRF_WriteRegMulti(NRF_REG_TX_ADDR, pipe_addr, 5U);
-    NRF_WriteRegMulti(NRF_REG_RX_ADDR_P0, pipe_addr, 5U); 
+    if (status == STATUS_OK) status = NRF_WriteRegMulti(NRF_REG_TX_ADDR, pipe_addr, 5U);
+    if (status == STATUS_OK) status = NRF_WriteRegMulti(NRF_REG_RX_ADDR_P0, pipe_addr, 5U); 
     
     /* 6. Set fixed payload size for channel 0 to 32 bytes */
-    NRF_WriteReg(NRF_REG_RX_PW_P0, 32U); 
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_RX_PW_P0, 32U); 
 
     /* 7. Clear TX buffer and old interrupt flags before start */
-    NRF_SendCommand(NRF_CMD_FLUSH_TX);
-    NRF_WriteReg(NRF_REG_STATUS, NRF_STATUS_TX_DS | NRF_STATUS_MAX_RT);
+    if (status == STATUS_OK) status = NRF_SendCommand(NRF_CMD_FLUSH_TX);
+    if (status == STATUS_OK) status = NRF_WriteReg(NRF_REG_STATUS, NRF_STATUS_TX_DS | NRF_STATUS_MAX_RT);
+
+    return status;
 }
 
 /* --- PUBLIC API IMPLEMENTATION --- */
 
-void NRF24_Init(const NRF24_HwConfig_t *hw_config)
+Status_t NRF24_Init(const NRF24_HwConfig_t *hw_config)
 {
     /* 1. Dependency Injection */
     nrf_spi = hw_config->SPIx;
     nrf_dma_tx = hw_config->DMA_Tx;
     nrf_dma_rx = hw_config->DMA_Rx;
     
-    nrf_current_state = NRF_STATE_IDLE;
-    
     /* 2. Register configuration */
-    NRF24_Setup();
+    Status_t status = NRF24_Setup();
+    nrf_current_state = (status == STATUS_OK) ? NRF_STATE_IDLE : NRF_STATE_FAULT;
+
+    return status;
 }
 
-bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
+Status_t NRF24_Transmit_IT(const NRF24_Payload_t *payload)
 {
     if (nrf_current_state != NRF_STATE_IDLE) {
-        return false;
+        return STATUS_ERR_BUSY;
     }
     nrf_current_state = NRF_STATE_TX_SPI_BUSY;
 
@@ -151,9 +159,15 @@ bool NRF24_Transmit_IT(const NRF24_Payload_t *payload)
     SCB_CleanDCache_by_Addr((uint32_t*)dma_tx_buf, 33U);
 
     GPIO_RESET(RF_CSN);
-    SPI_TransmitReceive_DMA(nrf_spi, nrf_dma_tx, nrf_dma_rx, dma_tx_buf, dma_rx_buf, 33U);
+    Status_t status = SPI_TransmitReceive_DMA(nrf_spi, nrf_dma_tx, nrf_dma_rx, dma_tx_buf, dma_rx_buf, 33U);
+    if (status != STATUS_OK)
+    {
+        /* A DMA stream that does not stop is a hardware fault, not a busy radio */
+        GPIO_SET(RF_CSN);
+        nrf_current_state = NRF_STATE_FAULT;
+    }
 
-    return true;
+    return status;
 }
 
 /* --- STATE MACHINE INTERRUPT HANDLING --- */
@@ -182,14 +196,22 @@ void NRF24_EXTI_Callback(void)
     GPIO_RESET(RF_TXEN);
 
     /* 2. Read status register */
-    uint8_t status = NRF_ReadReg(NRF_REG_STATUS);
+    uint8_t status = 0U;
+    Status_t result = NRF_ReadReg(NRF_REG_STATUS, &status);
 
     /* 3. Clear interrupt flags on NRF chip */
-    NRF_WriteReg(NRF_REG_STATUS, (NRF_STATUS_TX_DS | NRF_STATUS_MAX_RT));
+    if (result == STATUS_OK) result = NRF_WriteReg(NRF_REG_STATUS, (NRF_STATUS_TX_DS | NRF_STATUS_MAX_RT));
 
     /* Optional: Clear buffer in case of MAX_RT retransmission error */
-    if (status & NRF_STATUS_MAX_RT) {
-        NRF_SendCommand(NRF_CMD_FLUSH_TX);
+    if ((result == STATUS_OK) && (status & NRF_STATUS_MAX_RT)) {
+        result = NRF_SendCommand(NRF_CMD_FLUSH_TX);
+    }
+
+    if (result != STATUS_OK)
+    {
+        /* Flags left set keep IRQ low, so no further edge would ever arrive: stop the TX chain */
+        nrf_current_state = NRF_STATE_FAULT;
+        return;
     }
 
     /* 4. Return to IDLE - state machine ready for new frame from Scheduler */
@@ -198,7 +220,8 @@ void NRF24_EXTI_Callback(void)
     NRF24_Payload_t next_payload;
     if (TelemetryQueue_Pop(&next_payload))
     {
-        NRF24_Transmit_IT(&next_payload);
+        /* Telemetry is best effort: a failed start is latched as NRF_STATE_FAULT */
+        (void)NRF24_Transmit_IT(&next_payload);
     }
 }
 

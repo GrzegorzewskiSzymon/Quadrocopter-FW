@@ -16,7 +16,7 @@
 #include "led.h"
 #include "rcc.h"
 
-void BOARD_Radio_Init(void)
+Status_t BOARD_Radio_Init(void)
 {
     /* 1. Clocks */
     RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN | RCC_AHB4ENR_GPIOCEN | RCC_AHB4ENR_GPIODEN;
@@ -60,12 +60,19 @@ void BOARD_Radio_Init(void)
         .DMA_Tx = DMA1_Stream3,
         .DMA_Rx = DMA1_Stream2
     };
-    NRF24_Init(&nrf_hw);
+    Status_t status = NRF24_Init(&nrf_hw);
+    if (status != STATUS_OK)
+    {
+        /* IRQ stays disabled: the TX chain must not run on a radio that failed setup */
+        return status;
+    }
 
     /* 6. EXTI from NRF only after the driver holds its SPI handle: an IRQ glitch
           during power-up would otherwise run the callback on a NULL peripheral */
     extern void GPIO_NRF_EXTI_Init(void); // Temporarily, eventually EXTI will also be moved to board_init
     GPIO_NRF_EXTI_Init();
+
+    return STATUS_OK;
 }
 
 
@@ -149,7 +156,9 @@ static void BOARD_WS2812_Transmit(uint8_t *tx_buffer, uint32_t size)
     /* Clear interrupt flags for DMA1 stream 1 (TC & TE) */
     DMA1->LIFCR = DMA_LIFCR_CTCIF1 | DMA_LIFCR_CTEIF1;
     
-    SPI_Transmit_DMA(SPI4, DMA1_Stream1, tx_buffer, size);
+    /* LED frames are best effort and refreshed every 10 ms; a stream that fails to stop
+       only skips this frame */
+    (void)SPI_Transmit_DMA(SPI4, DMA1_Stream1, tx_buffer, size);
 }
 
 void BOARD_LED_Init(void)

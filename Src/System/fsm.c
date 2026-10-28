@@ -7,6 +7,7 @@
 
 #include "fsm.h"
 #include "icm45686.h"
+#include "nrf24l01.h"
 
 /* TODO: Include RC/Receiver headers to check arming conditions */
 
@@ -21,8 +22,10 @@ void FSM_EnterFailsafe(void) {
 }
 
 void FSM_Update(void) {
-    /* Without attitude data no state is safe; failsafe is latched until recovery is designed */
-    if (current_state != FSM_STATE_FAILSAFE && !ICM45686_IsHealthy()) {
+    /* Without attitude data or the operator link no state is safe;
+       failsafe is latched until recovery is designed */
+    if (current_state != FSM_STATE_FAILSAFE &&
+        (!ICM45686_IsHealthy() || (NRF24_GetState() == NRF_STATE_FAULT))) {
         current_state = FSM_STATE_FAILSAFE;
     }
 

@@ -11,7 +11,7 @@
 
 /**
  * @brief  Initializes the SysTick timer to generate an interrupt every 1 millisecond.
- * @note   This function assumes the core clock (SYSCLK) is exactly 550 MHz.
+ * @note   Assumes the core already runs at SYSCLK_HZ (call after RCC_Init()).
  */
 void SysTick_Init(void);
 

@@ -10,13 +10,18 @@
 #include <stdint.h>
 #include "stm32h723xx.h"
 #include "core_cm7.h"
+#include "status.h"
+
+/* Core clock produced by RCC_Init() */
+#define SYSCLK_HZ   550000000UL
 
 /**
  * @brief  Initializes System Clock to 550 MHz using HSI TODO: Change to 32 MHz HSE.
  * @note   This function configures VOS0, Flash Wait States, and PLL1.
  * Must be called early in main() before any other peripheral initialization.
+ * @retval STATUS_ERR_TIMEOUT if a regulator, oscillator, PLL or clock switch never became ready
  */
-void RCC_Init(void);
+Status_t RCC_Init(void);
 
 
 void RCC_EnableSPIClock(SPI_TypeDef *SPIx);

@@ -68,10 +68,9 @@ typedef struct {
  * Function Declarations
  * ========================================================================= */
 Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config);
-void     ICM45686_WriteRegister(uint8_t reg, uint8_t value);
-void     ICM45686_Config(void);
-bool     ICM45686_IsDataReady(void);
-void     ICM45686_ReadDataBurst(ICM45686_Data_t *data);
+/* Init/register access use blocking SPI: only before DRDY interrupts are enabled */
+Status_t ICM45686_WriteRegister(uint8_t reg, uint8_t value);
+Status_t ICM45686_Config(void);
 void     ICM45686_StartDMAReadBurst(void);
 void     ICM45686_DMA_RxComplete_Callback(void);
 void     ICM45686_DMA_Error_Callback(void);

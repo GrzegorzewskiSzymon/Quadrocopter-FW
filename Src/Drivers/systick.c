@@ -8,14 +8,16 @@
 
 #include "systick.h"
 #include "stm32h723xx.h"
+#include "rcc.h"
+
+#define SYSTICK_RATE_HZ     1000UL
 
 /* Global system time counter */
 volatile uint32_t sys_tick_ms = 0;
 
 void SysTick_Init(void)
 {
-    /* 1 ms at 550 MHz core clock equals 550,000 clock cycles. */
-    SysTick->LOAD = (550000UL - 1UL);
+    SysTick->LOAD = (SYSCLK_HZ / SYSTICK_RATE_HZ) - 1UL;
     SysTick->VAL = 0UL;
 
     /* Configuration:

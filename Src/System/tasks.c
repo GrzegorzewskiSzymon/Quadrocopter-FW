@@ -30,9 +30,11 @@ void Task_Telemetry(void) {
     if (NRF24_GetState() == NRF_STATE_IDLE) 
     {
         NRF24_Payload_t payload;
-        if (TelemetryQueue_Pop(&payload)) 
+        if (TelemetryQueue_Pop(&payload))
         {
-            NRF24_Transmit_IT(&payload);
+            /* Telemetry is best effort: a failed start is latched as NRF_STATE_FAULT,
+               which the FSM escalates */
+            (void)NRF24_Transmit_IT(&payload);
         }
     }
 }

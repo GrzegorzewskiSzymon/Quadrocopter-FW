@@ -20,7 +20,13 @@
 int main(void)
 {
     /* 1. Hardware abstraction bring-up */
-    MCU_Init();
+    if (MCU_Init() != STATUS_OK)
+    {
+        /* Without the expected clock tree no timing-dependent code is valid. Motors are not
+           initialised yet, so halting is the safe state (needs a power cycle until IWDG exists) */
+        __disable_irq();
+        for (;;) { }
+    }
 
     Scheduler_Init();
 
@@ -31,7 +37,11 @@ int main(void)
         /* Keep running so the fault can be signalled and reported over the radio */
         FSM_EnterFailsafe();
     }
-    BOARD_Radio_Init();
+    if (BOARD_Radio_Init() != STATUS_OK)
+    {
+        /* The radio is the only link to the operator (future RC input) */
+        FSM_EnterFailsafe();
+    }
 
 
     for(;;)

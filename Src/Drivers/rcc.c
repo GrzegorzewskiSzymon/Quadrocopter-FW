@@ -6,8 +6,27 @@
  */
 
 #include "rcc.h"
+#include "dwt.h"
 
-void RCC_Init(void)
+/* Generous budget for regulator, HSI, PLL lock and clock switch, each typically well
+   under 1 ms. Counted in SYSCLK cycles, so before the PLL switch it is ~8.6x longer. */
+#define RCC_READY_TIMEOUT_US    10000UL
+
+static Status_t RCC_WaitReady(const volatile uint32_t *reg, uint32_t mask, uint32_t expected)
+{
+    uint32_t start = DWT_GetCycles();
+
+    while ((*reg & mask) != expected)
+    {
+        if (DWT_IsElapsedUs(start, RCC_READY_TIMEOUT_US))
+        {
+            return STATUS_ERR_TIMEOUT;
+        }
+    }
+    return STATUS_OK;
+}
+
+Status_t RCC_Init(void)
 {
     /* 1. ENABLE CORTEX-M7 CACHES (CRITICAL FOR 550 MHz PERFORMANCE) */
     SCB_EnableICache();
@@ -17,19 +36,19 @@ void RCC_Init(void)
     PWR->CR3 = (PWR->CR3 & ~PWR_CR3_LDOEN) | PWR_CR3_LDOEN;
 
     /* Wait until active voltage regulator is ready */
-    while ((PWR->CSR1 & PWR_CSR1_ACTVOSRDY) == 0) {}
+    if (RCC_WaitReady(&PWR->CSR1, PWR_CSR1_ACTVOSRDY, PWR_CSR1_ACTVOSRDY) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     /* 3. VOLTAGE SCALING (VOS0) FOR 550 MHz */
     /* In H723, VOS0 is set directly via PWR_D3CR VOS field. */
     PWR->D3CR = (PWR->D3CR & ~PWR_D3CR_VOS) | (3 << PWR_D3CR_VOS_Pos);
 
     /* Wait until voltage scaling is ready in VOS0 mode */
-    while ((PWR->D3CR & PWR_D3CR_VOSRDY) == 0) {}
+    if (RCC_WaitReady(&PWR->D3CR, PWR_D3CR_VOSRDY, PWR_D3CR_VOSRDY) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     /* 4. ENABLE INTERNAL OSCILLATOR (HSI 64 MHz) */
     /* Enable HSI and wait for it to stabilize */
     RCC->CR |= RCC_CR_HSION;
-    while ((RCC->CR & RCC_CR_HSIRDY) == 0) {}
+    if (RCC_WaitReady(&RCC->CR, RCC_CR_HSIRDY, RCC_CR_HSIRDY) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     /* 5. FLASH MEMORY CONFIGURATION (WAIT STATES) */
     /* VOS0 & AXI clock = 275 MHz requires 3 Wait States (Latency) and WRHIGHFREQ = 2 */
@@ -38,7 +57,7 @@ void RCC_Init(void)
                  (2 << FLASH_ACR_WRHIGHFREQ_Pos);
 
     /* Verify if Flash Latency was successfully applied */
-    while ((FLASH->ACR & FLASH_ACR_LATENCY) != (3 << FLASH_ACR_LATENCY_Pos)) {}
+    if (RCC_WaitReady(&FLASH->ACR, FLASH_ACR_LATENCY, (3 << FLASH_ACR_LATENCY_Pos)) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     /* 6. PLL1 CONFIGURATION (USING HSI) */
     /* Select HSI (value 0) as PLL source, set DIVM1 = 32 (64 MHz / 32 = 2 MHz Ref Clock) */
@@ -59,7 +78,7 @@ void RCC_Init(void)
 
     /* 7. ACTIVATE PLL1 */
     RCC->CR |= RCC_CR_PLL1ON;
-    while ((RCC->CR & RCC_CR_PLL1RDY) == 0) {}
+    if (RCC_WaitReady(&RCC->CR, RCC_CR_PLL1RDY, RCC_CR_PLL1RDY) != STATUS_OK) return STATUS_ERR_TIMEOUT;
 
     /* 8. CONFIGURE BUS PRESCALERS */
     /* SYSCLK = 550 MHz, HCLK = 275 MHz, APB1/2/3/4 = 137.5 MHz */
@@ -76,7 +95,9 @@ void RCC_Init(void)
     RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | (3 << RCC_CFGR_SW_Pos);
 
     /* Wait until system uses PLL1 as its clock source */
-    while ((RCC->CFGR & RCC_CFGR_SWS) != (3 << RCC_CFGR_SWS_Pos)) {}
+    if (RCC_WaitReady(&RCC->CFGR, RCC_CFGR_SWS, (3 << RCC_CFGR_SWS_Pos)) != STATUS_OK) return STATUS_ERR_TIMEOUT;
+
+    return STATUS_OK;
 }
 
 

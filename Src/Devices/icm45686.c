@@ -35,16 +35,17 @@ static volatile uint32_t imu_stalled_transfers = 0U;
 
 /* --- PRIVATE HELPER FUNCTIONS --- */
 
-static inline uint8_t ICM45686_ReadRegister(uint8_t reg)
+static Status_t ICM45686_ReadRegister(uint8_t reg, uint8_t *value)
 {
     uint8_t tx_buf[2] = { (uint8_t)(reg | ICM45686_SPI_READ_BIT), 0x00 };
     uint8_t rx_buf[2] = { 0 };
 
     GPIO_RESET(IMU2_CS);
-    SPI_TransmitReceive_Blocking(imu_spi, tx_buf, rx_buf, 2);
+    Status_t status = SPI_TransmitReceive_Blocking(imu_spi, tx_buf, rx_buf, 2);
     GPIO_SET(IMU2_CS);
 
-    return rx_buf[1];
+    *value = rx_buf[1];
+    return status;
 }
 
 /* --- PUBLIC API IMPLEMENTATION --- */
@@ -60,19 +61,31 @@ Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
 
     /* 2. Software Reset */
     /* WHO_AM_I was unstable without reset (did not always respond correctly) */
-    ICM45686_WriteRegister(ICM45686_REG_MISC2, 0x02); // e.g., 0x01 for soft reset
+    Status_t status = ICM45686_WriteRegister(ICM45686_REG_MISC2, 0x02); // e.g., 0x01 for soft reset
+    if (status != STATUS_OK)
+    {
+        return status;
+    }
     Delay_ms(10); /* Time for IMU registers to reload after soft reset */
 
     /* 3. Hardware Sanity Check (WHO_AM_I) - IMU-soft-reset */
-    uint8_t who_am_i = ICM45686_ReadRegister(ICM45686_REG_WHO_AM_I);
-    
+    uint8_t who_am_i = 0U;
+    status = ICM45686_ReadRegister(ICM45686_REG_WHO_AM_I, &who_am_i);
+    if (status != STATUS_OK)
+    {
+        return status;
+    }
     if (who_am_i != ICM45686_WHO_AM_I_VAL)
     {
         return STATUS_ERR_NO_DEVICE;
     }
 
     /* 4. Configure IMU Internal Registers for DRDY Interrupt */
-    ICM45686_Config();
+    status = ICM45686_Config();
+    if (status != STATUS_OK)
+    {
+        return status;
+    }
 
     /* Staleness is measured from here; the caller enables DRDY interrupts right after */
     imu_last_sample_ms = sys_tick_ms;
@@ -82,58 +95,40 @@ Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
     return STATUS_OK;
 }
 
-void ICM45686_WriteRegister(uint8_t reg, uint8_t value)
+Status_t ICM45686_WriteRegister(uint8_t reg, uint8_t value)
 {
     /* Clear bit 7 to ensure a SPI write operation */
     uint8_t tx_buf[2] = { (uint8_t)(reg & ~ICM45686_SPI_READ_BIT), value };
 
     GPIO_RESET(IMU2_CS);
-    SPI_Transmit_Blocking(imu_spi, tx_buf, 2);
+    Status_t status = SPI_Transmit_Blocking(imu_spi, tx_buf, 2);
     GPIO_SET(IMU2_CS);
+
+    return status;
 }
 
-void ICM45686_Config(void)
+Status_t ICM45686_Config(void)
 {
-    ICM45686_WriteRegister(ICM45686_REG_INTF_CONFIG1_OVRD, ICM45686_INTF_CONFIG1_OVRD_4WIRE);
-    ICM45686_WriteRegister(ICM45686_REG_INT1_CONFIG2, ICM45686_INT1_CONFIG2_PP_PULSE_AH);
-    ICM45686_WriteRegister(ICM45686_REG_INT1_CONFIG0, ICM45686_INT1_CONFIG0_DRDY_EN);
-    ICM45686_WriteRegister(ICM45686_REG_ACCEL_CONFIG0, ICM45686_ACCEL_CONFIG0_8G_200HZ);
-    ICM45686_WriteRegister(ICM45686_REG_GYRO_CONFIG0, ICM45686_GYRO_CONFIG0_2000DPS_200HZ);
-    ICM45686_WriteRegister(ICM45686_REG_PWR_MGMT0, ICM45686_PWR_MGMT0_ACCEL_GYRO_LN);
+    static const uint8_t config[][2] = {
+        { ICM45686_REG_INTF_CONFIG1_OVRD, ICM45686_INTF_CONFIG1_OVRD_4WIRE },
+        { ICM45686_REG_INT1_CONFIG2,      ICM45686_INT1_CONFIG2_PP_PULSE_AH },
+        { ICM45686_REG_INT1_CONFIG0,      ICM45686_INT1_CONFIG0_DRDY_EN },
+        { ICM45686_REG_ACCEL_CONFIG0,     ICM45686_ACCEL_CONFIG0_8G_200HZ },
+        { ICM45686_REG_GYRO_CONFIG0,      ICM45686_GYRO_CONFIG0_2000DPS_200HZ },
+        { ICM45686_REG_PWR_MGMT0,         ICM45686_PWR_MGMT0_ACCEL_GYRO_LN },
+    };
+
+    for (uint32_t i = 0U; i < (sizeof(config) / sizeof(config[0])); i++)
+    {
+        Status_t status = ICM45686_WriteRegister(config[i][0], config[i][1]);
+        if (status != STATUS_OK)
+        {
+            return status;
+        }
+    }
 
     Delay_ms(200);
-}
-
-bool ICM45686_IsDataReady(void)
-{
-    uint8_t tx_buf[2] = { ICM45686_REG_INT1_STATUS0 | ICM45686_SPI_READ_BIT, 0x00 };
-    uint8_t rx_buf[2] = { 0x00, 0x00 };
-
-    GPIO_RESET(IMU2_CS);
-    SPI_TransmitReceive_Blocking(imu_spi, tx_buf, rx_buf, 2);
-    GPIO_SET(IMU2_CS);
-
-    return (rx_buf[1] & ICM45686_INT1_STATUS0_DRDY_MASK) != 0U;
-}
-
-void ICM45686_ReadDataBurst(ICM45686_Data_t *data)
-{
-    uint8_t tx_buf[15] = {0};
-    uint8_t rx_buf[15] = {0};
-
-    tx_buf[0] = ICM45686_REG_ACCEL_DATA_X0_UI | ICM45686_SPI_READ_BIT;
-
-    GPIO_RESET(IMU2_CS);
-    SPI_TransmitReceive_Blocking(imu_spi, tx_buf, rx_buf, 15);
-    GPIO_SET(IMU2_CS);
-
-    data->accel[0] = (int16_t)((rx_buf[2]  << 8) | rx_buf[1]);
-    data->accel[1] = (int16_t)((rx_buf[4]  << 8) | rx_buf[3]);
-    data->accel[2] = (int16_t)((rx_buf[6]  << 8) | rx_buf[5]);
-    data->gyro[0]  = (int16_t)((rx_buf[8]  << 8) | rx_buf[7]);
-    data->gyro[1]  = (int16_t)((rx_buf[10] << 8) | rx_buf[9]);
-    data->gyro[2]  = (int16_t)((rx_buf[12] << 8) | rx_buf[11]);
-    data->temp     = (int16_t)((rx_buf[14] << 8) | rx_buf[13]);
+    return STATUS_OK;
 }
 
 void ICM45686_StartDMAReadBurst(void)

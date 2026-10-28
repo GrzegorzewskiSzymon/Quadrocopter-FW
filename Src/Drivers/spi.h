@@ -9,6 +9,7 @@
 #include "stm32h723xx.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "status.h"
 
 typedef enum {
     SPI_MODE_MASTER,
@@ -34,8 +35,9 @@ typedef struct {
 } SPI_Config_t;
 
 void SPI_Init(SPI_TypeDef *SPIx, const SPI_Config_t *config);
-void SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size);
-void SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
+/* Blocking calls return STATUS_ERR_TIMEOUT if a flag stalls; the transfer is then aborted (SPE cleared) */
+Status_t SPI_Transmit_Blocking(SPI_TypeDef *SPIx, const uint8_t *data, uint32_t size);
+Status_t SPI_TransmitReceive_Blocking(SPI_TypeDef *SPIx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
 
 void SPI_TransmitReceive_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
 
@@ -44,10 +46,11 @@ void SPI_TransmitReceive_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, 
 void SPI_AbortTransfer_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx);
 
 /* Function signature for D1/D2 domain (SPI1, SPI2, SPI3, SPI4, SPI5) using DMA1/DMA2 */
-void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size);
+Status_t SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size);
 
-/* Additional function for standard DMA streams (D1/D2 Domain) */
-void SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
+/* Additional function for standard DMA streams (D1/D2 Domain).
+   DMA starters return STATUS_ERR_TIMEOUT if a previous stream does not stop; nothing is started then */
+Status_t SPI_TransmitReceive_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, DMA_Stream_TypeDef *DMA_Rx, const uint8_t *tx_data, uint8_t *rx_data, uint32_t size);
 
 /* Ends a DMA session: disables the SPI and detaches its DMA requests */
 void SPI_CloseTransfer_DMA(SPI_TypeDef *SPIx);
