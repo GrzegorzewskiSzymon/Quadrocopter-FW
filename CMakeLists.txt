@@ -36,6 +36,11 @@ target_link_options(${PROJECT_NAME}.elf PRIVATE
     --specs=nano.specs --specs=nosys.specs
 )
 
+# Relink when the linker script changes
+set_target_properties(${PROJECT_NAME}.elf PROPERTIES
+    LINK_DEPENDS ${CMAKE_SOURCE_DIR}/STM32H723ZGTX_FLASH.ld
+)
+
 # 6. Include directories (Where to look for .h files)
 file(GLOB_RECURSE CMSIS_HEADERS "Src/CMSIS/*.h")
 foreach(HEADER ${CMSIS_HEADERS})
