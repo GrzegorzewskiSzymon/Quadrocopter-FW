@@ -12,6 +12,7 @@
 #include "stddef.h"
 #include <string.h>
 #include "systick.h"
+#include "telemetry_queue.h"
 
 /* --- MACROS --- */
 #define NRF_CMD_W_REGISTER    0x20U
@@ -34,6 +35,7 @@
 
 /* --- INTERNAL VARIABLES --- */
 static volatile NRF24_State_t nrf_current_state = NRF_STATE_IDLE;
+
 /* Pointers to MCU domain hardware (Dependency Injection) */
 static SPI_TypeDef *nrf_spi = NULL;
 static DMA_Stream_TypeDef *nrf_dma_tx = NULL;
@@ -192,6 +194,12 @@ void NRF24_EXTI_Callback(void)
 
     /* 4. Return to IDLE - state machine ready for new frame from Scheduler */
     nrf_current_state = NRF_STATE_IDLE;
+
+    NRF24_Payload_t next_payload;
+    if (TelemetryQueue_Pop(&next_payload))
+    {
+        NRF24_Transmit_IT(&next_payload);
+    }
 }
 
 NRF24_State_t NRF24_GetState(void)

@@ -7,6 +7,8 @@
 
 #include "tasks.h"
 #include "led.h"
+#include "nrf24l01.h"
+#include "telemetry_queue.h"
 
 
 void Task_FSM_Update(void) {
@@ -18,7 +20,15 @@ void Task_Baro(void) {
 }
 
 void Task_Telemetry(void) {
-    /* TODO: Check FSM_GetState(), format payload, push to NRF24 SPI buffer */
+    /* Kickstart the transmission chain if NRF is sleeping but queue is pending */
+    if (NRF24_GetState() == NRF_STATE_IDLE) 
+    {
+        NRF24_Payload_t payload;
+        if (TelemetryQueue_Pop(&payload)) 
+        {
+            NRF24_Transmit_IT(&payload);
+        }
+    }
 }
 
 void Task_LED(void)
