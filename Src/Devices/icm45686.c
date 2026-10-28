@@ -24,6 +24,13 @@ static BDMA_Channel_TypeDef *imu_bdma_tx = NULL;
 static BDMA_Channel_TypeDef *imu_bdma_rx = NULL;
 static void (*imu_rx_complete_cb)(ICM45686_Data_t *data) = NULL;
 
+/* EXTI4 and BDMA_CH0/CH1 share one NVIC priority, so these never preempt each other;
+   volatile is for readers in thread context (health check) */
+static volatile bool imu_dma_busy = false;
+static volatile bool imu_fault = true; /* Unhealthy until Init proves the sensor is present */
+static volatile uint32_t imu_last_sample_ms = 0U;
+static volatile uint32_t imu_missed_samples = 0U;
+
 /* --- PRIVATE HELPER FUNCTIONS --- */
 
 static inline uint8_t ICM45686_ReadRegister(uint8_t reg)
@@ -63,6 +70,11 @@ Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
 
     /* 4. Configure IMU Internal Registers for DRDY Interrupt */
     ICM45686_Config();
+
+    /* Staleness is measured from here; the caller enables DRDY interrupts right after */
+    imu_last_sample_ms = sys_tick_ms;
+    imu_dma_busy = false;
+    imu_fault = false;
 
     return STATUS_OK;
 }
@@ -123,6 +135,19 @@ void ICM45686_ReadDataBurst(ICM45686_Data_t *data)
 
 void ICM45686_StartDMAReadBurst(void)
 {
+    if (imu_fault)
+    {
+        return;
+    }
+
+    /* Re-arming BDMA mid-transfer would corrupt the frame in flight; drop this DRDY instead */
+    if (imu_dma_busy)
+    {
+        imu_missed_samples++;
+        return;
+    }
+    imu_dma_busy = true;
+
     imu_tx_buf[0] = ICM45686_REG_ACCEL_DATA_X0_UI | ICM45686_SPI_READ_BIT;
     
     SCB_CleanDCache_by_Addr((uint32_t*)imu_tx_buf, 32);
@@ -148,9 +173,38 @@ void ICM45686_DMA_RxComplete_Callback(void)
     imu_data_latest.gyro[2]  = (int16_t)((imu_rx_buf[12] << 8) | imu_rx_buf[11]);
     imu_data_latest.temp     = (int16_t)((imu_rx_buf[14] << 8) | imu_rx_buf[13]);
 
+    imu_last_sample_ms = sys_tick_ms;
+    imu_dma_busy = false;
+
     /* Call callback instead of direct coupling with Flight Loop */
     if (imu_rx_complete_cb != NULL)
     {
         imu_rx_complete_cb(&imu_data_latest);
     }
+}
+
+void ICM45686_DMA_Error_Callback(void)
+{
+    /* BDMA transfer error means a bus/address fault (RM0468 BDMA), not a transient glitch:
+       stop the data path and let the health check escalate to failsafe */
+    imu_fault = true;
+
+    SPI_AbortTransfer_BDMA(imu_spi, imu_bdma_tx, imu_bdma_rx);
+    GPIO_SET(IMU2_CS);
+    imu_dma_busy = false;
+}
+
+bool ICM45686_IsHealthy(void)
+{
+    /* Read the sample time before 'now': the ISR may update it in between,
+       and the reverse order could make (now - last) underflow */
+    uint32_t last_ms = imu_last_sample_ms;
+    uint32_t now_ms = sys_tick_ms;
+
+    return !imu_fault && ((now_ms - last_ms) <= ICM45686_SAMPLE_TIMEOUT_MS);
+}
+
+uint32_t ICM45686_GetMissedSamples(void)
+{
+    return imu_missed_samples;
 }

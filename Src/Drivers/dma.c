@@ -24,17 +24,21 @@ void BDMA_Init(void)
     /* 3. Configure BDMA Channel 0 (RX) */
     BDMA_Channel0->CCR = BDMA_CCR_PL_1   /* Priority: High */
                        | BDMA_CCR_MINC   /* Memory increment mode */
-                       | BDMA_CCR_TCIE;  /* Transfer Complete Interrupt Enable */
+                       | BDMA_CCR_TCIE   /* Transfer Complete Interrupt Enable */
+                       | BDMA_CCR_TEIE;  /* Hardware disables the channel on error, so it must be reported */
     /* DIR bit is 0 by default (Peripheral to Memory) */
 
     /* 4. Configure BDMA Channel 1 (TX) */
     BDMA_Channel1->CCR = BDMA_CCR_PL_1   /* Priority: High */
                        | BDMA_CCR_MINC   /* Memory increment mode */
-                       | BDMA_CCR_DIR;   /* Memory to Peripheral */
+                       | BDMA_CCR_DIR    /* Memory to Peripheral */
+                       | BDMA_CCR_TEIE;  /* A failed TX stalls the master; RX would never complete */
 
-    /* 5. Enable NVIC Interrupt for BDMA Rx Complete (Hard Real-Time Priority) */
+    /* 5. Same priority as EXTI4 (IMU DRDY) so the IMU path never preempts itself */
     NVIC_SetPriority(BDMA_Channel0_IRQn, 1);
     NVIC_EnableIRQ(BDMA_Channel0_IRQn);
+    NVIC_SetPriority(BDMA_Channel1_IRQn, 1);
+    NVIC_EnableIRQ(BDMA_Channel1_IRQn);
 }
 
 

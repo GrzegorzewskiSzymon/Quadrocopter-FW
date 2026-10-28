@@ -197,11 +197,34 @@ void BOARD_LED_Init(void)
 
 void BDMA_CH0_IRQHandler(void)
 {
-    /* Standard transfer completion handling */
-    if (BDMA->ISR & BDMA_ISR_TCIF0)
+    uint32_t isr = BDMA->ISR;
+
+    /* CGIF0 clears every channel 0 flag (GIF, TCIF, HTIF, TEIF) */
+    BDMA->IFCR = BDMA_IFCR_CGIF0;
+
+    /* Error takes precedence: on TE the received frame is incomplete */
+    if (isr & BDMA_ISR_TEIF0)
     {
-        BDMA->IFCR = BDMA_IFCR_CGIF0 | BDMA_IFCR_CTCIF0;
+        ICM45686_DMA_Error_Callback();
+    }
+    else if (isr & BDMA_ISR_TCIF0)
+    {
         ICM45686_DMA_RxComplete_Callback();
+    }
+}
+
+/**
+ * @trigger BDMA Channel 1 (SPI6 TX) transfer error. TC is not enabled on this channel.
+ */
+void BDMA_CH1_IRQHandler(void)
+{
+    uint32_t isr = BDMA->ISR;
+
+    BDMA->IFCR = BDMA_IFCR_CGIF1;
+
+    if (isr & BDMA_ISR_TEIF1)
+    {
+        ICM45686_DMA_Error_Callback();
     }
 }
 

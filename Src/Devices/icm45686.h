@@ -39,6 +39,9 @@
 
 #define ICM45686_INT1_STATUS0_DRDY_MASK      (1U << 2)
 
+/* ODR is 200 Hz (5 ms); four missed samples in a row mean the data path is dead */
+#define ICM45686_SAMPLE_TIMEOUT_MS      20U
+
 /* =========================================================================
  * Data Types & Configuration
  * ========================================================================= */
@@ -67,3 +70,9 @@ bool     ICM45686_IsDataReady(void);
 void     ICM45686_ReadDataBurst(ICM45686_Data_t *data);
 void     ICM45686_StartDMAReadBurst(void);
 void     ICM45686_DMA_RxComplete_Callback(void);
+void     ICM45686_DMA_Error_Callback(void);
+
+/* False until Init succeeds, after a DMA error, or when samples stop arriving */
+bool     ICM45686_IsHealthy(void);
+/* DRDY interrupts dropped because the previous burst was still in flight */
+uint32_t ICM45686_GetMissedSamples(void);

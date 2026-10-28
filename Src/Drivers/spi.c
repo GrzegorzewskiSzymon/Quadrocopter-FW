@@ -106,6 +106,19 @@ void SPI_TransmitReceive_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, 
     SPIx->CR1 |= SPI_CR1_CSTART;
 }
 
+void SPI_AbortTransfer_BDMA(SPI_TypeDef *SPIx, BDMA_Channel_TypeDef *BDMA_Tx, BDMA_Channel_TypeDef *BDMA_Rx)
+{
+    /* Clearing SPE stops the master state machine and flushes the FIFOs, so the
+       aborted frame cannot leak into the next transfer (RM0468 SPI disabling procedure) */
+    SPIx->CR1 &= ~SPI_CR1_SPE;
+
+    BDMA_Rx->CCR &= ~BDMA_CCR_EN;
+    BDMA_Tx->CCR &= ~BDMA_CCR_EN;
+
+    SPIx->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_UDRC |
+                 SPI_IFCR_OVRC | SPI_IFCR_CRCEC | SPI_IFCR_MODFC | SPI_IFCR_TIFREC;
+}
+
 
 void SPI_Transmit_DMA(SPI_TypeDef *SPIx, DMA_Stream_TypeDef *DMA_Tx, const uint8_t *tx_data, uint32_t size)
 {
