@@ -10,7 +10,12 @@
 #include "nrf24l01.h"
 #include "telemetry_queue.h"
 #include "fsm.h"
+#include "icm45686.h"
 
+
+void Task_IMU_Watchdog(void) {
+    ICM45686_CheckStall();
+}
 
 void Task_FSM_Update(void) {
     FSM_Update();

@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 
+void Task_IMU_Watchdog(void);
 void Task_FSM_Update(void);
 void Task_Baro(void);
 void Task_Telemetry(void);

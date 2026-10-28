@@ -23,13 +23,15 @@ static SPI_TypeDef *imu_spi = NULL;
 static BDMA_Channel_TypeDef *imu_bdma_tx = NULL;
 static BDMA_Channel_TypeDef *imu_bdma_rx = NULL;
 static void (*imu_rx_complete_cb)(ICM45686_Data_t *data) = NULL;
+static void (*imu_bus_recover_cb)(void) = NULL;
 
 /* EXTI4 and BDMA_CH0/CH1 share one NVIC priority, so these never preempt each other;
    volatile is for readers in thread context (health check) */
 static volatile bool imu_dma_busy = false;
 static volatile bool imu_fault = true; /* Unhealthy until Init proves the sensor is present */
 static volatile uint32_t imu_last_sample_ms = 0U;
-static volatile uint32_t imu_missed_samples = 0U;
+static volatile uint32_t imu_burst_start_ms = 0U;
+static volatile uint32_t imu_stalled_transfers = 0U;
 
 /* --- PRIVATE HELPER FUNCTIONS --- */
 
@@ -54,6 +56,7 @@ Status_t ICM45686_Init(const ICM45686_HwConfig_t *hw_config)
     imu_bdma_tx = hw_config->BDMA_Tx;
     imu_bdma_rx = hw_config->BDMA_Rx;
     imu_rx_complete_cb = hw_config->RxCompleteCb;
+    imu_bus_recover_cb = hw_config->BusRecoverCb;
 
     /* 2. Software Reset */
     /* WHO_AM_I was unstable without reset (did not always respond correctly) */
@@ -140,13 +143,14 @@ void ICM45686_StartDMAReadBurst(void)
         return;
     }
 
-    /* Re-arming BDMA mid-transfer would corrupt the frame in flight; drop this DRDY instead */
+    /* Re-arming BDMA mid-transfer would corrupt the frame in flight;
+       a stalled burst is recovered by ICM45686_CheckStall() */
     if (imu_dma_busy)
     {
-        imu_missed_samples++;
         return;
     }
     imu_dma_busy = true;
+    imu_burst_start_ms = sys_tick_ms;
 
     imu_tx_buf[0] = ICM45686_REG_ACCEL_DATA_X0_UI | ICM45686_SPI_READ_BIT;
     
@@ -189,9 +193,40 @@ void ICM45686_DMA_Error_Callback(void)
        stop the data path and let the health check escalate to failsafe */
     imu_fault = true;
 
-    SPI_AbortTransfer_BDMA(imu_spi, imu_bdma_tx, imu_bdma_rx);
+    /* Deselect before releasing the bus, see ICM45686_StartDMAReadBurst() */
     GPIO_SET(IMU2_CS);
+    SPI_AbortTransfer_BDMA(imu_spi, imu_bdma_tx, imu_bdma_rx);
     imu_dma_busy = false;
+}
+
+void ICM45686_CheckStall(void)
+{
+    /* Driven by time, not by DRDY: while a stalled burst holds CS low the sensor
+       stops issuing DRDY (seen on HW), so the next EXTI4 never comes. Masked so that
+       EXTI4/BDMA cannot start or complete a burst while the bus is being reset */
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    if (imu_dma_busy && !imu_fault &&
+        ((sys_tick_ms - imu_burst_start_ms) >= ICM45686_BURST_TIMEOUT_MS))
+    {
+        imu_stalled_transfers++;
+
+        /* Deselect first: once SPE drops, SCK/MOSI are released and may glitch, which the
+           sensor must not see as clock edges of a (write) command */
+        GPIO_SET(IMU2_CS);
+        SPI_AbortTransfer_BDMA(imu_spi, imu_bdma_tx, imu_bdma_rx);
+
+        /* Clearing SPE alone did not recover a peripheral that lost its kernel clock
+           (seen on HW), so the bus is fully re-initialised */
+        if (imu_bus_recover_cb != NULL)
+        {
+            imu_bus_recover_cb();
+        }
+        imu_dma_busy = false;
+    }
+
+    __set_PRIMASK(primask);
 }
 
 bool ICM45686_IsHealthy(void)
@@ -204,7 +239,7 @@ bool ICM45686_IsHealthy(void)
     return !imu_fault && ((now_ms - last_ms) <= ICM45686_SAMPLE_TIMEOUT_MS);
 }
 
-uint32_t ICM45686_GetMissedSamples(void)
+uint32_t ICM45686_GetStalledTransfers(void)
 {
-    return imu_missed_samples;
+    return imu_stalled_transfers;
 }

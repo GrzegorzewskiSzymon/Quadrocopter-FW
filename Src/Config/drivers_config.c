@@ -69,6 +69,26 @@ void BOARD_Radio_Init(void)
 }
 
 
+/* SPI6 is dedicated to the IMU: its BDMA channels and the stall recovery below
+   reset the whole peripheral, which would break any other device on this bus */
+static const SPI_Config_t imu_spi_cfg = {
+    .Mode      = SPI_MODE_MASTER,
+    .Direction = SPI_DIR_FULL_DUPLEX,
+    .Prescaler = (4U << SPI_CFG1_MBR_Pos), /* MBR=4 -> prescaler /32 */
+    .DataSize  = 8,
+    .CPOL      = true,
+    .CPHA      = true,
+    .HoldPinsWhenDisabled = true /* SPE is toggled while CS is low */
+};
+
+/* Called with IRQs masked on a stalled burst: clock enable + RCC reset + config bring
+   SPI6 back from any internal state; DMAEN is restored by the next BDMA transfer */
+static void BOARD_IMU_BusRecover(void)
+{
+    RCC_EnableSPIClock(SPI6);
+    SPI_Init(SPI6, &imu_spi_cfg);
+}
+
 Status_t BOARD_IMU_Init(void)
 {
     /* 1. Clocks */
@@ -88,16 +108,7 @@ Status_t BOARD_IMU_Init(void)
 
     /* 3. SPI6 Hardware Configuration */
 
-    SPI_Config_t spi6_cfg = {
-        .Mode      = SPI_MODE_MASTER,
-        .Direction = SPI_DIR_FULL_DUPLEX,
-        .Prescaler = (4U << SPI_CFG1_MBR_Pos), /* MBR=4 -> prescaler /32 */
-        .DataSize  = 8,
-        .CPOL      = true,
-        .CPHA      = true,
-        .HoldPinsWhenDisabled = true /* SPE is toggled while CS is low */
-    };
-    SPI_Init(SPI6, &spi6_cfg);
+    SPI_Init(SPI6, &imu_spi_cfg);
 
     /* 4. Interrupt Pin Configuration (PA4) and EXTI4 routing; line stays masked for now */
     GPIO_INIT(IMU2_INT, GPIO_MODE_INPUT, GPIO_OTYPE_PP, GPIO_SPEED_VHIGH, GPIO_PUPD_NONE);
@@ -111,7 +122,8 @@ Status_t BOARD_IMU_Init(void)
         .SPIx = SPI6,
         .BDMA_Tx = BDMA_Channel1,
         .BDMA_Rx = BDMA_Channel0,
-        .RxCompleteCb = ControlLoop_Execute /* Control Loop connected as Callback */
+        .RxCompleteCb = ControlLoop_Execute, /* Control Loop connected as Callback */
+        .BusRecoverCb = BOARD_IMU_BusRecover
     };
     Status_t status = ICM45686_Init(&imu_hw);
     if (status != STATUS_OK)

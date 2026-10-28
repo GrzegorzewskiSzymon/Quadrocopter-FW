@@ -42,6 +42,9 @@
 /* ODR is 200 Hz (5 ms); four missed samples in a row mean the data path is dead */
 #define ICM45686_SAMPLE_TIMEOUT_MS      20U
 
+/* A 15-byte burst takes ~30 us; with a 1 ms tick, 2 ticks guarantee at least 1 ms elapsed */
+#define ICM45686_BURST_TIMEOUT_MS       2U
+
 /* =========================================================================
  * Data Types & Configuration
  * ========================================================================= */
@@ -58,6 +61,7 @@ typedef struct {
     BDMA_Channel_TypeDef *BDMA_Tx;
     BDMA_Channel_TypeDef *BDMA_Rx;
     void (*RxCompleteCb)(ICM45686_Data_t *data); /* Callback to pass data up */
+    void (*BusRecoverCb)(void);                  /* Re-initialises the SPI peripheral after a stalled burst */
 } ICM45686_HwConfig_t;
 
 /* =========================================================================
@@ -74,5 +78,8 @@ void     ICM45686_DMA_Error_Callback(void);
 
 /* False until Init succeeds, after a DMA error, or when samples stop arriving */
 bool     ICM45686_IsHealthy(void);
-/* DRDY interrupts dropped because the previous burst was still in flight */
-uint32_t ICM45686_GetMissedSamples(void);
+/* Call periodically (<= 1 ms) from thread context: aborts a burst older than
+   ICM45686_BURST_TIMEOUT_MS and re-initialises the bus */
+void     ICM45686_CheckStall(void);
+/* Bursts aborted by ICM45686_CheckStall() */
+uint32_t ICM45686_GetStalledTransfers(void);

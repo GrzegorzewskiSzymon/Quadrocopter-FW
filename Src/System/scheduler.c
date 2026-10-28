@@ -12,6 +12,7 @@
 
 /* Task list - statically configured */
 static task_t task_list[] = {
+    {Task_IMU_Watchdog, 1,  0},  /* 1 kHz  */
     {Task_FSM_Update,  2,   0},  /* 500 Hz */
     {Task_Baro,        10,  0},  /* 100 Hz */
     {Task_Telemetry,   20,  0},  /* 50 Hz  */
